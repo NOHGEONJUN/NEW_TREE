@@ -686,82 +686,57 @@ class IROSAutomation {
     async selectRegistryItems() {
         console.log('📝 등기 항목 선택 중...');
         
-        // 🎯 MCP 스타일 JSON API 명령 - 등기 항목 체크박스 선택
-        const checkboxCommand = {
-            "function": "() => {\n    console.log('🔍 체크안되어있는 체크박스 모두 선택 시작...');\n    let checkedCount = 0;\n    \n    // 지점/분사무소 체크박스 선택 (data-rowindex=\"14\")\n    const branchCheckbox = document.querySelector('input[data-rowindex=\"14\"]');\n    if (branchCheckbox && !branchCheckbox.checked) {\n        branchCheckbox.click();\n        checkedCount++;\n        console.log('✅ 지점/분사무소 체크박스 선택됨');\n    }\n    \n    // 지배인/대리인 체크박스 선택 (data-rowindex=\"15\")  \n    const managerCheckbox = document.querySelector('input[data-rowindex=\"15\"]');\n    if (managerCheckbox && !managerCheckbox.checked) {\n        managerCheckbox.click();\n        checkedCount++;\n        console.log('✅ 지배인/대리인 체크박스 선택됨');\n    }\n    \n    // 모든 체크 가능한 체크박스들 확인\n    const allCheckboxes = document.querySelectorAll('input[type=\"checkbox\"]:not([disabled])');\n    allCheckboxes.forEach((checkbox, index) => {\n        if (!checkbox.checked) {\n            checkbox.click();\n            checkedCount++;\n        }\n    });\n    \n    return `✅ ${checkedCount}개의 체크박스가 모두 선택되었습니다.`;\n}"
-        };
-        
-        console.log('☑️  등기 항목 체크박스 선택 명령 실행:', JSON.stringify(checkboxCommand, null, 2));
-        
-        // 🎯 정확한 ID로 지점/분사무소, 지배인/대리인 체크박스 선택
+        // 🎯 간결한 체크박스 선택 로직
         try {
-            // 사용자가 제공한 정확한 지점/분사무소 체크박스 ID
-            const branchCheckboxId = '#G_mf_wfm_potal_main_wfm_content_grd_item_sel_obj_list___checkbox_dynamic_checkbox_14_0_14';
-            await this.page.waitForSelector(branchCheckboxId, { timeout: 10000 });
-            await this.page.click(branchCheckboxId);
-            console.log('✅ 지점/분사무소 체크박스 선택 성공 (정확한 ID)');
+            // 1순위: 클래스 + data-rowindex 조합 (가장 안정적)
+            await this.page.click('input.w2grid_embedded_check[data-rowindex="14"]');
+            await this.page.click('input.w2grid_embedded_check[data-rowindex="15"]');
+            console.log('✅ 등기 항목 체크박스 선택 성공 (클래스+data-rowindex)');
             
-            // 사용자가 제공한 정확한 지배인/대리인 체크박스 ID  
-            const managerCheckboxId = '#G_mf_wfm_potal_main_wfm_content_grd_item_sel_obj_list___checkbox_dynamic_checkbox_15_0_15';
-            await this.page.waitForSelector(managerCheckboxId, { timeout: 10000 });
-            await this.page.click(managerCheckboxId);
-            console.log('✅ 지배인/대리인 체크박스 선택 성공 (정확한 ID)');
+        } catch (e1) {
+            console.log('⚠️ 클래스 방식 실패, 정확한 ID 방식 시도...');
             
-        } catch (e) {
-            console.log('⚠️ 정확한 ID로 체크박스 선택 실패, JavaScript 방법 시도...');
-            
-            // 대안: JavaScript로 직접 선택
-            const result = await this.page.evaluate(() => {
-                console.log('🔍 체크안되어있는 체크박스 모두 선택 시작...');
-                let checkedCount = 0;
+            try {
+                // 2순위: 정확한 ID 사용
+                await this.page.click('#G_mf_wfm_potal_main_wfm_content_grd_item_sel_obj_list___checkbox_dynamic_checkbox_14_0_14');
+                await this.page.click('#G_mf_wfm_potal_main_wfm_content_grd_item_sel_obj_list___checkbox_dynamic_checkbox_15_0_15');
+                console.log('✅ 등기 항목 체크박스 선택 성공 (정확한 ID)');
                 
-                // 지점/분사무소 체크박스 선택 (data-rowindex="14")
-                const branchCheckbox = document.querySelector('input[data-rowindex="14"]');
-                if (branchCheckbox && !branchCheckbox.checked) {
-                    branchCheckbox.click();
-                    checkedCount++;
-                    console.log('✅ 지점/분사무소 체크박스 선택됨');
-                }
+            } catch (e2) {
+                console.log('⚠️ ID 방식도 실패, JavaScript 방법 시도...');
                 
-                // 지배인/대리인 체크박스 선택 (data-rowindex="15")  
-                const managerCheckbox = document.querySelector('input[data-rowindex="15"]');
-                if (managerCheckbox && !managerCheckbox.checked) {
-                    managerCheckbox.click();
-                    checkedCount++;
-                    console.log('✅ 지배인/대리인 체크박스 선택됨');
-                }
-                
-                // 모든 체크 가능한 체크박스들 확인
-                const allCheckboxes = document.querySelectorAll('input[type="checkbox"]:not([disabled])');
-                allCheckboxes.forEach((checkbox, index) => {
-                    if (!checkbox.checked) {
-                        checkbox.click();
-                        checkedCount++;
-                        console.log(`✅ 체크박스 ${index + 1} 선택됨`);
-                    }
+                // 3순위: JavaScript evaluate 방식
+                const result = await this.page.evaluate(() => {
+                    let checkedCount = 0;
+                    
+                    // 지점/분사무소, 지배인/대리인 체크박스 선택
+                    ['14', '15'].forEach(rowIndex => {
+                        const checkbox = document.querySelector(`input[data-rowindex="${rowIndex}"]`);
+                        if (checkbox && !checkbox.checked) {
+                            checkbox.click();
+                            checkedCount++;
+                        }
+                    });
+                    
+                    return `✅ ${checkedCount}개의 체크박스가 선택되었습니다.`;
                 });
-                
-                return `✅ ${checkedCount}개의 체크박스가 모두 선택되었습니다.`;
-            });
-            console.log('JavaScript 실행 결과:', result);
+                console.log('JavaScript 실행 결과:', result);
+            }
         }
         
         await this.page.waitForTimeout(1000);
         
-        // 🎯 다음 버튼 클릭 (정확한 ID 사용)
+        // 🎯 다음 버튼 클릭
         try {
-            await this.page.waitForSelector('#mf_wfm_potal_main_wfm_content_btn_next', { timeout: 10000 });
             await this.page.click('#mf_wfm_potal_main_wfm_content_btn_next');
-            console.log('✅ 다음 버튼 클릭 성공 (정확한 ID)');
+            console.log('✅ 다음 버튼 클릭 성공');
         } catch (e) {
-            console.log('⚠️ 정확한 ID 실패, 대안 방법 시도...');
             await this.page.click('link:has-text("다음")');
-            console.log('✅ 다음 버튼 클릭 성공 (대안 방법)');
+            console.log('✅ 다음 버튼 클릭 성공 (대안)');
         }
         
         await this.page.waitForLoadState('networkidle');
         await this.page.waitForTimeout(2000);
-        
         console.log('✅ 등기 항목 선택 완료');
     }
 
