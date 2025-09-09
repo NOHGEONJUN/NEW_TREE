@@ -820,17 +820,6 @@ class IROSAutomation {
         console.log(`\n🏢 ===== "${companyName}" 처리 시작 (시도 ${retryCount + 1}/3) =====`);
         
         try {
-            // 🎯 모든 회사마다 동일한 세팅 적용
-            if (!isFirst) {
-                console.log('➕ 추가 버튼 클릭...');
-                await this.page.click('link:has-text("추가")');
-                await this.page.waitForLoadState('networkidle');
-                await this.page.waitForTimeout(2000);
-                
-                // 검색 페이지로 이동하여 첫 번째 회사와 동일한 상태로 만들기
-                console.log('🔄 검색 페이지로 이동하여 세팅 적용...');
-                await this.navigateToSearch();
-            }
             
             // 🎯 모든 회사마다 동일한 세팅 적용 (전체등기소, 전체법인, 살아있는 등기)
             console.log(`⚙️ "${companyName}" 처리 전 검색 필터 설정...`);
