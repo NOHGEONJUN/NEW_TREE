@@ -640,26 +640,26 @@ class IROSAutomation {
     }
 
     async setIssuanceOptions() {
-        console.log('📄 발급 옵션 설정 중...');
+        console.log('📄 발급 옵션 설정 중... (열람 선택)');
         
-        // 🎯 발급(출력) 라디오 버튼 선택 (정확한 selector 사용)
+        // 🎯 열람 라디오 버튼 선택 (data-index="0"이 열람)
         try {
-            // 사용자가 제공한 정확한 발급(출력) 라디오 버튼 selector
-            const issuanceRadioSelector = 'input[name="mf_wfm_potal_main_wfm_content_rad_view_issue_svc_cd_input"][data-index="1"]';
-            await this.page.waitForSelector(issuanceRadioSelector, { timeout: 10000 });
-            await this.page.click(issuanceRadioSelector);
-            console.log('✅ 발급(출력) 옵션 선택 성공 (정확한 selector)');
+            // 사용자가 제공한 정확한 열람 라디오 버튼 selector
+            const viewRadioSelector = 'input[name="mf_wfm_potal_main_wfm_content_rad_view_issue_svc_cd_input"][data-index="0"]';
+            await this.page.waitForSelector(viewRadioSelector, { timeout: 10000 });
+            await this.page.click(viewRadioSelector);
+            console.log('✅ 열람 옵션 선택 성공 (정확한 selector)');
         } catch (e) {
             console.log('⚠️ 정확한 selector 실패, JavaScript 방법 시도...');
             // 대안: JavaScript로 직접 클릭
             const result = await this.page.evaluate(() => {
-                const issueRadio = document.querySelector('input[type="radio"][data-index="1"]');
-                if (issueRadio) {
-                    issueRadio.click();
-                    console.log('✅ 발급(출력) 옵션 선택 성공 (JavaScript)');
-                    return "✅ 발급(출력) 옵션이 성공적으로 선택되었습니다.";
+                const viewRadio = document.querySelector('input[type="radio"][data-index="0"]');
+                if (viewRadio) {
+                    viewRadio.click();
+                    console.log('✅ 열람 옵션 선택 성공 (JavaScript)');
+                    return "✅ 열람 옵션이 성공적으로 선택되었습니다.";
                 }
-                return "❌ 발급(출력) 라디오 버튼을 찾을 수 없습니다.";
+                return "❌ 열람 라디오 버튼을 찾을 수 없습니다.";
             });
             console.log('JavaScript 실행 결과:', result);
         }
@@ -680,7 +680,7 @@ class IROSAutomation {
         await this.page.waitForLoadState('networkidle');
         await this.page.waitForTimeout(2000);
         
-        console.log('✅ 발급 옵션 설정 완료');
+        console.log('✅ 발급 옵션 설정 완료 (열람 선택)');
     }
 
     async selectRegistryItems() {
