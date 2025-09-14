@@ -416,6 +416,36 @@ class IROSAutomation {
         await this.handlePaymentPopup();
     }
 
+    async navigateToHome() {
+        console.log('🏠 홈화면으로 이동 중...');
+        
+        try {
+            // 홈 버튼이 나타날 때까지 대기
+            await this.page.waitForSelector('#mf_wfm_potal_main_wf_header_btn_home', { timeout: 10000 });
+            
+            // 홈 버튼 클릭
+            await this.page.click('#mf_wfm_potal_main_wf_header_btn_home');
+            console.log('✅ 홈 버튼 클릭 성공');
+            
+            // 페이지 로딩 대기
+            await this.page.waitForLoadState('domcontentloaded');
+            await this.page.waitForTimeout(2000);
+            
+            console.log('✅ 홈화면 도달 완료');
+            
+        } catch (e) {
+            console.log('⚠️ 홈 버튼 클릭 실패, URL로 직접 이동...');
+            // 대안: URL로 직접 이동
+            await this.page.goto('https://www.iros.go.kr/index.jsp', {
+                waitUntil: 'domcontentloaded',
+                timeout: 30000
+            });
+            await this.page.waitForLoadState('domcontentloaded');
+            await this.page.waitForTimeout(2000);
+            console.log('✅ 홈화면 도달 완료 (URL 직접 이동)');
+        }
+    }
+
     async setupSearchFilters() {
         console.log('⚙️ 검색 필터 설정 중...');
         // navigateToSearch에서 이미 결제 팝업 처리 완료
@@ -794,7 +824,7 @@ class IROSAutomation {
         console.log('✅ 주민등록번호 미공개 설정 완료');
     }
 
-    async finalConfirmation(isLastCompany = false, isLastBatch = false) {
+    async finalConfirmation(isLastInBatch = false, isLastBatch = false) {
         console.log('🎯 최종 확인 및 결제 페이지 이동...');
         
         // 🎯 등기사항증명서 확인 페이지에서 다음 버튼 클릭
@@ -812,8 +842,8 @@ class IROSAutomation {
         await this.page.waitForTimeout(2000);
         
         // 🎯 결제대상확인 페이지에서 추가 또는 결제 버튼 클릭
-        if (isLastCompany && isLastBatch) {
-            // 마지막 회사이고 마지막 배치인 경우: 결제 버튼 클릭
+        if (isLastInBatch && isLastBatch) {
+            // 배치의 마지막 회사이고 전체 마지막 배치인 경우: 결제 버튼 클릭
             try {
                 await this.page.waitForSelector('#mf_wfm_potal_main_wfm_content_btn_pay', { timeout: 10000 });
                 await this.page.click('#mf_wfm_potal_main_wfm_content_btn_pay');
@@ -823,8 +853,11 @@ class IROSAutomation {
                 await this.page.click('link:has-text("결제")');
                 console.log('✅ 결제 버튼 클릭 성공 (대안 방법)');
             }
+        } else if (isLastInBatch && !isLastBatch) {
+            // 배치의 마지막 회사이지만 전체 마지막 배치가 아닌 경우: 아무 버튼도 누르지 않음
+            console.log('✅ 배치 완료 - 추가 버튼을 누르지 않고 결제 대기 상태로 유지');
         } else {
-            // 중간 회사인 경우: 추가 버튼 클릭
+            // 배치 중간 회사인 경우: 추가 버튼 클릭
             try {
                 await this.page.waitForSelector('#mf_wfm_potal_main_wfm_content_btn_new_add', { timeout: 10000 });
                 await this.page.click('#mf_wfm_potal_main_wfm_content_btn_new_add');
@@ -962,6 +995,9 @@ class IROSAutomation {
                         answer.toLowerCase() === 'yes') {
                         console.log('✅ 결제 완료 확인! 다음 배치를 시작합니다...');
                         
+                        // 홈화면으로 이동
+                        await this.navigateToHome();
+                        
                         // 다음 배치를 위해 검색 페이지로 이동
                         await this.navigateToSearch();
                         await this.setupSearchFilters();
@@ -972,6 +1008,7 @@ class IROSAutomation {
                 } else if (i + batchSize < companies.length && successCount === 0) {
                     // 성공한 회사가 없으면 바로 다음 배치로 진행
                     console.log('\n⏭️ 성공한 회사가 없어 바로 다음 배치로 진행합니다...');
+                    await this.navigateToHome();
                     await this.navigateToSearch();
                     await this.setupSearchFilters();
                 }
