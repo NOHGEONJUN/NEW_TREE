@@ -446,50 +446,49 @@ class IROSAutomation {
         }
     }
 
-    async setupSearchFilters() {
-        console.log('⚙️ 검색 필터 설정 중...');
-        // navigateToSearch에서 이미 결제 팝업 처리 완료
+    // 각 회사별로 다른 검색 필터 설정
+    async setupSearchFiltersForCompany(companyData) {
+        console.log(`⚙️ "${companyData.등기상호}" 검색 필터 설정 중...`);
         
         try {
-            // 🎯 MCP 스타일 JSON API 명령들 - 검색 필터 설정
+            // 1. 등기소 설정 (CSV에서 읽은 값 또는 기본값 사용)
+            await this.page.getByLabel('등기소').selectOption({ label: companyData.등기소 });
+            console.log(`✅ 등기소: ${companyData.등기소}`);
             
-            // 1. 등기소: 전체등기소 설정
-            const registryCommand = {
-                "element": "등기소 콤보박스",
-                "ref": "e1235", // MCP에서 성공한 정확한 ref
-                "values": ["전체등기소"]
-            };
-            console.log('🏢 등기소 설정 명령 실행:', JSON.stringify(registryCommand, null, 2));
+            // 2. 법인구분 설정 (CSV에서 읽은 값 또는 기본값 사용)
+            await this.page.getByLabel('법인구분').selectOption({ label: companyData.법인구분 });
+            console.log(`✅ 법인구분: ${companyData.법인구분}`);
             
+            // 3. 등기부상태 설정 (CSV에서 읽은 값 또는 기본값 사용)
+            await this.page.getByLabel('등기부상태').selectOption({ label: companyData.등기부상태 });
+            console.log(`✅ 등기부상태: ${companyData.등기부상태}`);
+            
+            // 4. 본지점구분 설정 (CSV에서 읽은 값 또는 기본값 사용)
+            if (companyData.본지점구분 !== '전체 본지점') {
+                await this.page.getByLabel('본지점구분').selectOption({ label: companyData.본지점구분 });
+                console.log(`✅ 본지점구분: ${companyData.본지점구분}`);
+            } else {
+                console.log('✅ 본지점구분: 전체 본지점 (기본값 유지)');
+            }
+            
+            console.log(`✅ "${companyData.등기상호}" 검색 필터 설정 완료`);
+            await this.page.waitForTimeout(500);
+            
+        } catch (error) {
+            console.log(`⚠️ "${companyData.등기상호}" 검색 필터 설정 중 오류:`, error.message);
+        }
+    }
+
+    // 기존 메서드 유지 (하위 호환성)
+    async setupSearchFilters() {
+        console.log('⚙️ 검색 필터 설정 중... (기본값 사용)');
+        
+        try {
             await this.page.getByLabel('등기소').selectOption({ label: '전체등기소' });
-            console.log('✅ 등기소: 전체등기소 설정');
-            
-            // 2. 법인구분: 전체 법인(지배인, 미성년자, 법정대리인 제외) 설정
-            const corporationCommand = {
-                "element": "법인구분 콤보박스",
-                "ref": "e1240", // MCP에서 성공한 정확한 ref
-                "values": ["전체 법인(지배인, 미성년자, 법정대리인 제외)"]
-            };
-            console.log('🏪 법인구분 설정 명령 실행:', JSON.stringify(corporationCommand, null, 2));
-            
             await this.page.getByLabel('법인구분').selectOption({ label: '전체 법인(지배인, 미성년자, 법정대리인 제외)' });
-            console.log('✅ 법인구분: 전체 법인 설정');
-            
-            // 3. 등기부상태: 살아있는 등기 설정
-            const statusCommand = {
-                "element": "등기부상태 콤보박스",
-                "ref": "e1246", // MCP에서 성공한 정확한 ref  
-                "values": ["살아있는 등기"]
-            };
-            console.log('📋 등기부상태 설정 명령 실행:', JSON.stringify(statusCommand, null, 2));
-            
             await this.page.getByLabel('등기부상태').selectOption({ label: '살아있는 등기' });
-            console.log('✅ 등기부상태: 살아있는 등기 설정');
             
-            // 본지점구분은 기본값 유지(전체 본지점)
-            console.log('✅ 본지점구분: 전체 본지점 (기본값 유지)');
-            
-            console.log('✅ 모든 검색 필터 설정 완료 (MCP 스타일)');
+            console.log('✅ 기본 검색 필터 설정 완료');
             await this.page.waitForTimeout(500);
             
         } catch (error) {
@@ -497,8 +496,8 @@ class IROSAutomation {
         }
     }
 
-    async searchCompany(companyName, retryCount = 0) {
-        console.log(`🔍 "${companyName}" 검색 중... (시도 ${retryCount + 1}/3)`);
+    async searchCompany(companyName) {
+        console.log(`🔍 "${companyName}" 검색 중...`);
         
         try {
             // 🎯 MCP 스타일 JSON API 명령 - 등기상호 입력 필드에 텍스트 입력
@@ -622,46 +621,23 @@ class IROSAutomation {
             
         } catch (error) {
             console.log(`❌ "${companyName}" 검색 실패:`, error.message);
-            
-            // 재시도 로직 (최대 3회)
-            if (retryCount < 2) {
-                console.log(`🔄 홈화면으로 이동 후 "${companyName}" 재시도...`);
-                
-                // 홈화면으로 이동
-                try {
-                    await this.navigateToHome();
-                    await this.page.waitForLoadState('networkidle');
-                    await this.page.waitForTimeout(2000);
-                } catch (homeError) {
-                    console.log('⚠️ 홈화면 이동 실패, URL로 직접 이동...');
-                    await this.page.goto('https://www.iros.go.kr/');
-                    await this.page.waitForLoadState('networkidle');
-                    await this.page.waitForTimeout(2000);
-                }
-                
-                // 검색 페이지로 다시 이동하고 필터 설정
-                await this.navigateToSearch();
-                await this.setupSearchFilters();
-                
-                // 재귀 호출로 재시도
-                return await this.searchCompany(companyName, retryCount + 1);
-            } else {
-                console.log(`❌ "${companyName}" 최종 실패 - 3회 시도 모두 실패`);
-                throw error;
-            }
+            console.log(`⏭️ "${companyName}" 건너뛰고 다음 회사로 진행합니다.`);
+            throw error; // 바로 에러를 던져서 다음 회사로 넘어가도록 함
         }
     }
 
     async selectCompanyAndProceed() {
         console.log('📋 검색 결과에서 첫 번째 회사 선택...');
         
-        // 검색 결과 확인 후 다음 버튼 클릭 (정확한 ID 사용)
+        // 1단계: 먼저 다음 버튼 클릭 시도 (정상적인 경우)
         try {
             // 사용자가 제공한 정확한 다음 버튼 ID 사용
             await this.page.click('#mf_wfm_potal_main_wfm_content_btn_next');
             console.log('✅ 다음 버튼 클릭 성공 (정확한 ID selector)');
             await this.page.waitForLoadState('networkidle');
             await this.page.waitForTimeout(2000);
+            console.log('✅ 회사 선택 및 진행 완료');
+            return true; // 성공
         } catch (e) {
             console.log('⚠️ 정확한 ID로 다음 버튼 클릭 실패, 대안 방법 시도...');
             try {
@@ -670,12 +646,88 @@ class IROSAutomation {
                 console.log('✅ 다음 버튼 클릭 성공 (일반적인 방법)');
                 await this.page.waitForLoadState('networkidle');
                 await this.page.waitForTimeout(2000);
+                console.log('✅ 회사 선택 및 진행 완료');
+                return true; // 성공
             } catch (e2) {
-                console.log('⚠️ 다음 버튼이 없거나 클릭 실패 (정상 상황일 수 있음)');
+                console.log('⚠️ 모든 다음 버튼 클릭 방법 실패, 검색 결과 확인 중...');
+                
+                // 2단계: 다음 버튼 클릭이 모두 실패했을 때만 검색 결과 확인
+                console.log('🔍 검색 결과 존재 여부 확인 중...');
+                const hasNoResults = await this.checkForNoSearchResults();
+                
+                if (hasNoResults) {
+                    console.log('❌ 검색 결과가 없음 - 상호명이 존재하지 않는 것으로 간주');
+                    console.log('🔄 홈페이지로 돌아가서 다음 회사로 건너뛰기...');
+                    
+                    // 홈페이지로 돌아가기
+                    await this.navigateToHome();
+                    
+                    // 검색 페이지로 다시 이동
+                    await this.navigateToSearch();
+                    
+                    throw new Error('상호명이 존재하지 않거나 검색 결과가 없음');
+                } else {
+                    console.log('❌ 다음 버튼이 없지만 검색 결과는 존재함 - 기타 오류로 간주');
+                    throw new Error('다음 버튼 클릭 실패 - 기타 오류');
+                }
             }
         }
-        
-        console.log('✅ 회사 선택 및 진행 완료');
+    }
+
+    // 검색 결과가 없는지 확인하는 메서드
+    async checkForNoSearchResults() {
+        try {
+            // 방법 1: 특정 XPath로 "검색조건에 맞는 법인등기기록을 찾지 못했습니다" 텍스트 확인
+            const noResultsElement = await this.page.$('//*[@id="mf_wfm_potal_main_wfm_content_wq_uuid_4536"]/b/span');
+            if (noResultsElement) {
+                const text = await noResultsElement.textContent();
+                if (text && text.includes('검색조건에 맞는 법인등기기록을 찾지 못했습니다')) {
+                    console.log('✅ 검색 결과 없음 메시지 감지됨:', text);
+                    return true;
+                }
+            }
+            
+            // 방법 2: 페이지 전체에서 해당 텍스트 검색
+            const pageContent = await this.page.content();
+            if (pageContent.includes('검색조건에 맞는 법인등기기록을 찾지 못했습니다')) {
+                console.log('✅ 검색 결과 없음 메시지 감지됨 (페이지 전체 검색)');
+                return true;
+            }
+            
+            // 방법 3: JavaScript로 직접 확인
+            const hasNoResults = await this.page.evaluate(() => {
+                // 특정 XPath 요소 확인
+                const xpathElement = document.evaluate(
+                    '//*[@id="mf_wfm_potal_main_wfm_content_wq_uuid_4536"]/b/span',
+                    document,
+                    null,
+                    XPathResult.FIRST_ORDERED_NODE_TYPE,
+                    null
+                ).singleNodeValue;
+                
+                if (xpathElement && xpathElement.textContent.includes('검색조건에 맞는 법인등기기록을 찾지 못했습니다')) {
+                    return true;
+                }
+                
+                // 전체 페이지에서 텍스트 검색
+                const allElements = Array.from(document.querySelectorAll('*'));
+                return allElements.some(el => 
+                    el.textContent && el.textContent.includes('검색조건에 맞는 법인등기기록을 찾지 못했습니다')
+                );
+            });
+            
+            if (hasNoResults) {
+                console.log('✅ 검색 결과 없음 메시지 감지됨 (JavaScript 검색)');
+                return true;
+            }
+            
+            console.log('ℹ️ 검색 결과가 존재함');
+            return false;
+            
+        } catch (error) {
+            console.log('⚠️ 검색 결과 확인 중 오류:', error.message);
+            return false; // 오류 시에는 검색 결과가 있다고 가정
+        }
     }
 
     async setIssuanceOptions() {
@@ -1027,14 +1079,14 @@ class IROSAutomation {
         console.log('✅ 결제 페이지 도달 완료');
     }
 
-    async processCompany(companyName, isFirst = true, retryCount = 0, isLastInBatch = false, isLastBatch = false) {
-        console.log(`\n🏢 ===== "${companyName}" 처리 시작 (시도 ${retryCount + 1}/3) =====`);
+    async processCompany(companyData, isFirst = true, isLastInBatch = false, isLastBatch = false) {
+        const companyName = companyData.등기상호;
+        console.log(`\n🏢 ===== "${companyName}" 처리 시작 =====`);
         
         try {
-            
-            // 🎯 모든 회사마다 동일한 세팅 적용 (전체등기소, 전체법인, 살아있는 등기)
+            // 🎯 각 회사마다 CSV에서 읽은 실제 검색 조건 적용
             console.log(`⚙️ "${companyName}" 처리 전 검색 필터 설정...`);
-            await this.setupSearchFilters();
+            await this.setupSearchFiltersForCompany(companyData);
 
             // 🎯 모든 회사마다 동일한 방식으로 처리
             console.log(`🔍 "${companyName}" 검색 시작...`);
@@ -1052,57 +1104,23 @@ class IROSAutomation {
         } catch (error) {
             console.error(`❌ "${companyName}" 처리 실패: ${error.message}`);
             
-            // 중복결제 에러인 경우 특별 처리
-            if (error.message.includes('중복결제')) {
-                console.log(`🔄 "${companyName}" 중복결제로 인해 건너뛰기 - 이미 검색 페이지로 이동됨`);
-                return false; // 중복결제는 재시도하지 않고 건너뛰기
-            }
-            
-            // 재시도 로직 (최대 3회)
-            if (retryCount < 2) {
-                console.log(`🔄 홈화면으로 이동 후 "${companyName}" 재시도... (${retryCount + 2}/3)`);
-                
-                // 홈화면으로 이동
-                try {
-                    await this.navigateToHome();
-                    await this.page.waitForLoadState('networkidle');
-                    await this.page.waitForTimeout(2000);
-                } catch (homeError) {
-                    console.log('⚠️ 홈화면 이동 실패, URL로 직접 이동...');
-                    await this.page.goto('https://www.iros.go.kr/');
-                    await this.page.waitForLoadState('networkidle');
-                    await this.page.waitForTimeout(2000);
-                }
-                
-                // 검색 페이지로 다시 이동
-                try {
-                    await this.navigateToSearch();
-                    await this.setupSearchFilters();
-                } catch (navError) {
-                    console.log('⚠️ 검색 페이지 복귀 중 오류, 다시 시도...');
-                    await this.page.reload({ waitUntil: 'networkidle' });
-                    await this.page.waitForTimeout(3000);
-                    await this.navigateToSearch();
-                    await this.setupSearchFilters();
-                }
-                
-                // 재귀 호출로 재시도
-                return await this.processCompany(companyName, isFirst, retryCount + 1);
+            // 상호명이 존재하지 않는 경우와 다른 오류를 구분
+            if (error.message.includes('상호명이 존재하지 않거나 검색 결과가 없음')) {
+                console.log(`⏭️ "${companyName}" - 상호명이 존재하지 않음, 건너뛰고 다음 회사로 진행`);
+                this.failedCompanies.push({ company: companyName, error: '상호명이 존재하지 않음' });
             } else {
-                console.log(`❌ "${companyName}" 최종 실패 - 3회 시도 모두 실패`);
+                console.log(`⏭️ "${companyName}" - 기타 오류로 건너뛰고 다음 회사로 진행`);
                 this.failedCompanies.push({ company: companyName, error: error.message });
-                console.log(`⏭️ "${companyName}" 건너뛰고 다음 회사로 진행합니다.`);
                 
-                // 🔧 실패한 회사는 건너뛰고 다음 회사로 진행
-                // 검색 필터 다시 설정 (다음 회사를 위해)
+                // 기타 오류인 경우에만 검색 필터 재설정
                 try {
                     await this.setupSearchFilters();
                 } catch (filterError) {
                     console.log('⚠️ 검색 필터 재설정 실패, 기본값으로 계속 진행');
                 }
-                
-                return false; // 실패했지만 다음 회사로 진행
             }
+            
+            return false; // 실패했지만 다음 회사로 진행
         }
     }
 
@@ -1123,19 +1141,19 @@ class IROSAutomation {
                 let failCount = 0;
                 
                 for (let j = 0; j < batch.length; j++) {
-                    const companyName = batch[j];
+                    const companyData = batch[j];
                     const isFirst = (i === 0 && j === 0); // 전체 첫 번째 회사인지 확인
                     const isLastInBatch = (j === batch.length - 1); // 배치 내 마지막 회사인지 확인
                     const isLastBatch = (batchNumber === totalBatches); // 마지막 배치인지 확인
                     
-                    const result = await this.processCompany(companyName, isFirst, 0, isLastInBatch, isLastBatch);
+                    const result = await this.processCompany(companyData, isFirst, isLastInBatch, isLastBatch);
                     
                     if (result === true) {
                         successCount++;
-                        console.log(`✅ "${companyName}" 성공 (${successCount}/${batch.length})`);
+                        console.log(`✅ "${companyData.등기상호}" 성공 (${successCount}/${batch.length})`);
                     } else {
                         failCount++;
-                        console.log(`⏭️ "${companyName}" 건너뛰기 (중복결제 또는 기타 사유)`);
+                        console.log(`⏭️ "${companyData.등기상호}" 건너뛰기 (중복결제 또는 기타 사유)`);
                     }
                 }
                 
@@ -1193,14 +1211,8 @@ class IROSAutomation {
                 throw new Error(`CSV 파일을 찾을 수 없습니다: ${csvPath}`);
             }
             
-            const csvContent = fs.readFileSync(csvPath, 'utf8');
-            const lines = csvContent.split('\n').filter(line => line.trim());
-            
-            // 첫 번째 줄이 헤더인 경우 스킵
-            const companies = lines.slice(1).map(line => {
-                const parts = line.split(',');
-                return parts[1] ? parts[1].trim() : null;
-            }).filter(company => company && company !== '회사명');
+            // CSV 데이터를 구조화된 형태로 파싱
+            const companies = await this.parseCSVData(csvPath);
             
             if (companies.length === 0) {
                 throw new Error('CSV 파일에서 유효한 회사명을 찾을 수 없습니다.');
@@ -1208,8 +1220,40 @@ class IROSAutomation {
             
             console.log(`📊 CSV에서 ${companies.length}개 회사 발견:`);
             companies.forEach((company, index) => {
-                console.log(`  ${index + 1}. ${company}`);
+                console.log(`  ${index + 1}. ${company.등기상호}`);
+                console.log(`     - 등기소: ${company.등기소 || '전체등기소'}`);
+                console.log(`     - 법인구분: ${company.법인구분 || '전체 법인(지배인, 미성년자, 법정대리인 제외)'}`);
+                console.log(`     - 등기부상태: ${company.등기부상태 || '살아있는 등기'}`);
+                console.log(`     - 본지점구분: ${company.본지점구분 || '전체 본지점'}`);
+                console.log(`     - 주말여부: ${company.주말여부 || 'N'}`);
+                console.log('');
             });
+            
+            // 10개씩 나눠서 처리할 배치 개수 계산
+            const batchSize = 10;
+            const totalBatches = Math.ceil(companies.length / batchSize);
+            console.log(`\n🔢 처리 방식: 10개씩 나눠서 ${totalBatches}개 배치로 처리`);
+            
+            if (totalBatches > 1) {
+                console.log(`📋 배치 구성:`);
+                for (let i = 0; i < companies.length; i += batchSize) {
+                    const batchNumber = Math.floor(i / batchSize) + 1;
+                    const batchEnd = Math.min(i + batchSize, companies.length);
+                    const batchCount = batchEnd - i;
+                    console.log(`  - 배치 ${batchNumber}: ${batchCount}개 회사 (${companies.slice(i, batchEnd).join(', ')})`);
+                }
+                console.log('\n💡 각 배치 완료 후 결제하고 다음 배치로 진행합니다.');
+            }
+            
+            // 🎯 브라우저 초기화 및 로그인 과정 추가
+            console.log('\n🚀 브라우저 초기화 및 로그인 과정 시작...');
+            await this.start();
+            await this.waitForLogin();
+            
+            // 🎯 배치 구성 완료 후 법인열람발급 페이지로 이동
+            console.log('\n🚀 법인열람발급 페이지로 이동 중...');
+            await this.removeAdsAndPopups();
+            await this.navigateToSearch();
             
             await this.processMultipleCompanies(companies);
             
@@ -1249,9 +1293,6 @@ class IROSAutomation {
                 console.log(`  ${index + 1}. ${company}`);
             });
             
-            await this.removeAdsAndPopups();
-            await this.navigateToSearch();
-            
             // 10개씩 나눠서 처리할 배치 개수 계산
             const batchSize = 10;
             const totalBatches = Math.ceil(companies.length / batchSize);
@@ -1278,6 +1319,11 @@ class IROSAutomation {
                     return;
                 }
             }
+            
+            // 🎯 처리 시작 확인 후 법인열람발급 페이지로 이동
+            console.log('\n🚀 법인열람발급 페이지로 이동 중...');
+            await this.removeAdsAndPopups();
+            await this.navigateToSearch();
             
             await this.processMultipleCompanies(companies);
             
@@ -1311,6 +1357,31 @@ class IROSAutomation {
         }
         
         console.log('\n🎯 자동화 완료!');
+    }
+
+    // CSV 데이터를 구조화된 형태로 파싱하는 메서드
+    async parseCSVData(csvPath) {
+        const csvContent = fs.readFileSync(csvPath, 'utf8');
+        const lines = csvContent.split('\n').filter(line => line.trim());
+        
+        const companies = [];
+        const headers = lines[0].split(',');
+        
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',');
+            if (values[0] && values[0].trim()) { // 등기상호가 있는 경우만
+                companies.push({
+                    등기상호: values[0].trim(),
+                    등기소: values[1] && values[1].trim() ? values[1].trim() : '전체등기소',
+                    법인구분: values[2] && values[2].trim() ? values[2].trim() : '전체 법인(지배인, 미성년자, 법정대리인 제외)',
+                    등기부상태: values[3] && values[3].trim() ? values[3].trim() : '살아있는 등기',
+                    본지점구분: values[4] && values[4].trim() ? values[4].trim() : '전체 본지점',
+                    주말여부: values[5] && values[5].trim() ? values[5].trim() : 'N'
+                });
+            }
+        }
+        
+        return companies;
     }
 
     async cleanup() {
