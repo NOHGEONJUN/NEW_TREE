@@ -439,51 +439,133 @@ class IROSFindAutomation {
             const allCompanies = await this.page.evaluate(() => {
                 const rows = document.querySelectorAll('tr');
                 const companies = [];
+                
+                // 먼저 헤더에서 "상호" 컬럼의 인덱스 찾기
+                let companyNameColumnIndex = -1;
+                const headerRow = document.querySelector('tr');
+                if (headerRow) {
+                    const headerCells = headerRow.querySelectorAll('th, td');
+                    for (let i = 0; i < headerCells.length; i++) {
+                        const cell = headerCells[i];
+                        const text = cell.textContent.trim();
+                        const colIndex = cell.getAttribute('data-colindex');
+                        
+                        if (text === '상호' || colIndex === '2') {
+                            companyNameColumnIndex = i;
+                            console.log(`상호 컬럼 인덱스 발견: ${i} (텍스트: "${text}", data-colindex: "${colIndex}")`);
+                            break;
+                        }
+                    }
+                }
+                
+                // 상호 컬럼 인덱스를 찾지 못했으면 기본값 2 사용
+                if (companyNameColumnIndex === -1) {
+                    companyNameColumnIndex = 2;
+                    console.log('상호 컬럼을 찾지 못해 기본값 2 사용');
+                }
+                
                 for (let row of rows) {
                     const cells = row.querySelectorAll('td');
-                    // 상호명은 3번째 컬럼 (인덱스 2)에 있음
-                    if (cells.length > 2 && cells[2].textContent.trim()) {
-                        companies.push(cells[2].textContent.trim());
+                    if (cells.length > companyNameColumnIndex && cells[companyNameColumnIndex].textContent.trim()) {
+                        const companyName = cells[companyNameColumnIndex].textContent.trim();
+                        companies.push(companyName);
+                        console.log(`법인명 읽음: "${companyName}" (컬럼 인덱스: ${companyNameColumnIndex})`);
                     }
                 }
                 return companies;
             });
             
-            console.log(`🔍 현재 페이지의 모든 법인명: [${allCompanies.join(', ')}]`);
+            // 법인명 출력 제거 (디버깅용이었음)
             
-            // JavaScript를 사용하여 법인명과 상세 정보 검색
+            // JavaScript를 사용하여 법인명과 상세 정보 검색 (체크박스 클릭까지 포함)
             const found = await this.page.evaluate((data) => {
                 const rows = document.querySelectorAll('tr');
                 console.log(`🔍 검색 대상: "${data.등기상호}"`);
                 console.log(`🔍 법인구분: "${data.법인구분 || '없음'}"`);
                 console.log(`🔍 관할등기소: "${data.등기소 || '없음'}"`);
                 
+                // 먼저 헤더에서 "상호" 컬럼의 인덱스 찾기
+                let companyNameColumnIndex = -1;
+                const headerRow = document.querySelector('tr');
+                if (headerRow) {
+                    const headerCells = headerRow.querySelectorAll('th, td');
+                    for (let i = 0; i < headerCells.length; i++) {
+                        const cell = headerCells[i];
+                        const text = cell.textContent.trim();
+                        const colIndex = cell.getAttribute('data-colindex');
+                        
+                        if (text === '상호' || colIndex === '2') {
+                            companyNameColumnIndex = i;
+                            console.log(`상호 컬럼 인덱스 발견: ${i} (텍스트: "${text}", data-colindex: "${colIndex}")`);
+                            break;
+                        }
+                    }
+                }
+                
+                // 상호 컬럼 인덱스를 찾지 못했으면 기본값 2 사용
+                if (companyNameColumnIndex === -1) {
+                    companyNameColumnIndex = 2;
+                    console.log('상호 컬럼을 찾지 못해 기본값 2 사용');
+                }
+                
                 for (let i = 0; i < rows.length; i++) {
                     const row = rows[i];
                     const rowText = row.textContent;
                     
-                    // 1. 등기상호로 먼저 검색
-                    if (rowText.includes(data.등기상호)) {
-                        console.log(`✅ 등기상호 "${data.등기상호}" 발견 (행 ${i})`);
-                        console.log(`📋 행 내용: "${rowText}"`);
-                        
-                        // 2. 법인구분이 있으면 확인
-                        if (data.법인구분 && data.법인구분.trim() && !rowText.includes(data.법인구분)) {
-                            console.log(`⚠️ 법인구분 불일치: 예상 "${data.법인구분}", 실제 행: "${rowText}"`);
-                            continue; // 다음 행으로
+                    // 1. 등기상호로 먼저 검색 (정확한 컬럼에서)
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length > companyNameColumnIndex) {
+                        const companyName = cells[companyNameColumnIndex].textContent.trim();
+                        if (companyName.includes(data.등기상호)) {
+                            console.log(`✅ 등기상호 "${data.등기상호}" 발견 (행 ${i})`);
+                            console.log(`📋 행 내용: "${rowText}"`);
+                            console.log(`🔍 검색 조건 - 등기상호: "${data.등기상호}", 법인구분: "${data.법인구분 || '없음'}", 관할등기소: "${data.등기소 || '없음'}"`);
+                            
+                            // 2. 법인구분이 있으면 확인 (4번째 컬럼, 인덱스 3)
+                            if (data.법인구분 && data.법인구분.trim()) {
+                                const corporationType = cells.length > 3 ? cells[3].textContent.trim() : '';
+                                console.log(`🔍 법인구분 확인 중: 예상 "${data.법인구분}", 실제 "${corporationType}"`);
+                                if (!corporationType.includes(data.법인구분)) {
+                                    console.log(`⚠️ 법인구분 불일치: 예상 "${data.법인구분}", 실제 "${corporationType}"`);
+                                    console.log(`⚠️ 법인구분이 일치하지 않아 다음 행으로 넘어갑니다.`);
+                                    continue; // 다음 행으로
+                                } else {
+                                    console.log(`✅ 법인구분 일치: "${data.법인구분}"`);
+                                }
+                            } else {
+                                console.log(`ℹ️ 법인구분이 없어서 건너뜀`);
+                            }
+                            
+                            // 3. 관할등기소가 있으면 확인 (5번째 컬럼, 인덱스 4)
+                            if (data.등기소 && data.등기소.trim()) {
+                                const registryOffice = cells.length > 4 ? cells[4].textContent.trim() : '';
+                                console.log(`🔍 관할등기소 확인 중: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
+                                if (!registryOffice.includes(data.등기소)) {
+                                    console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
+                                    console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
+                                    continue; // 다음 행으로
+                                } else {
+                                    console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
+                                }
+                            } else {
+                                console.log(`ℹ️ 관할등기소가 없어서 건너뜀`);
+                            }
+                            
+                            // 4. 모든 조건이 일치하면 체크박스 클릭 (1번째 컬럼, 인덱스 0)
+                            console.log(`✅ 모든 조건이 일치합니다. 체크박스 찾는 중...`);
+                            const checkbox = cells.length > 0 ? cells[0].querySelector('input[type="checkbox"]') : null;
+                            if (checkbox) {
+                                console.log(`✅ 체크박스 발견, 클릭 시도...`);
+                                checkbox.click();
+                                console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
+                                return true;
+                            } else {
+                                console.log(`❌ 체크박스를 찾을 수 없음 (행 ${i})`);
+                            }
                         }
-                        
-                        // 3. 관할등기소가 있으면 확인
-                        if (data.등기소 && data.등기소.trim() && !rowText.includes(data.등기소)) {
-                            console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 행: "${rowText}"`);
-                            continue; // 다음 행으로
-                        }
-                        
-                        console.log(`✅ 모든 조건 일치: "${data.등기상호}"`);
-                        return true;
                     }
                 }
-                console.log(`❌ "${data.등기상호}" 법인을 찾을 수 없습니다.`);
+                console.log(`❌ "${data.등기상호}" 법인을 찾을 수 없음`);
                 return false;
             }, companyData);
             
@@ -609,36 +691,84 @@ class IROSFindAutomation {
                 const rows = document.querySelectorAll('tr');
                 console.log(`🔍 총 행 수: ${rows.length}`);
                 
+                // 먼저 헤더에서 "상호" 컬럼의 인덱스 찾기
+                let companyNameColumnIndex = -1;
+                const headerRow = document.querySelector('tr');
+                if (headerRow) {
+                    const headerCells = headerRow.querySelectorAll('th, td');
+                    for (let i = 0; i < headerCells.length; i++) {
+                        const cell = headerCells[i];
+                        const text = cell.textContent.trim();
+                        const colIndex = cell.getAttribute('data-colindex');
+                        
+                        if (text === '상호' || colIndex === '2') {
+                            companyNameColumnIndex = i;
+                            console.log(`상호 컬럼 인덱스 발견: ${i} (텍스트: "${text}", data-colindex: "${colIndex}")`);
+                            break;
+                        }
+                    }
+                }
+                
+                // 상호 컬럼 인덱스를 찾지 못했으면 기본값 2 사용
+                if (companyNameColumnIndex === -1) {
+                    companyNameColumnIndex = 2;
+                    console.log('상호 컬럼을 찾지 못해 기본값 2 사용');
+                }
+                
                 for (let i = 0; i < rows.length; i++) {
                     const row = rows[i];
                     const rowText = row.textContent;
                     
-                    // 1. 등기상호로 먼저 검색
-                    if (rowText.includes(data.등기상호)) {
-                        console.log(`✅ 등기상호 "${data.등기상호}" 발견 (행 ${i})`);
-                        console.log(`📋 행 내용: "${rowText}"`);
-                        
-                        // 2. 법인구분이 있으면 확인
-                        if (data.법인구분 && data.법인구분.trim() && !rowText.includes(data.법인구분)) {
-                            console.log(`⚠️ 법인구분 불일치: 예상 "${data.법인구분}", 실제 행: "${rowText}"`);
-                            continue; // 다음 행으로
-                        }
-                        
-                        // 3. 관할등기소가 있으면 확인
-                        if (data.등기소 && data.등기소.trim() && !rowText.includes(data.등기소)) {
-                            console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 행: "${rowText}"`);
-                            continue; // 다음 행으로
-                        }
-                        
-                        // 4. 모든 조건이 일치하면 체크박스 클릭
-                        const checkbox = row.querySelector('input[type="checkbox"]');
-                        if (checkbox) {
-                            console.log(`✅ 체크박스 발견, 클릭 시도...`);
-                            checkbox.click();
-                            console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
-                            return true;
-                        } else {
-                            console.log(`❌ 체크박스를 찾을 수 없음 (행 ${i})`);
+                    // 1. 등기상호로 먼저 검색 (정확한 컬럼에서)
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length > companyNameColumnIndex) {
+                        const companyName = cells[companyNameColumnIndex].textContent.trim();
+                        if (companyName.includes(data.등기상호)) {
+                            console.log(`✅ 등기상호 "${data.등기상호}" 발견 (행 ${i})`);
+                            console.log(`📋 행 내용: "${rowText}"`);
+                            console.log(`🔍 검색 조건 - 등기상호: "${data.등기상호}", 법인구분: "${data.법인구분 || '없음'}", 관할등기소: "${data.등기소 || '없음'}"`);
+                            
+                            // 2. 법인구분이 있으면 확인 (4번째 컬럼, 인덱스 3)
+                            if (data.법인구분 && data.법인구분.trim()) {
+                                const corporationType = cells.length > 3 ? cells[3].textContent.trim() : '';
+                                console.log(`🔍 법인구분 확인 중: 예상 "${data.법인구분}", 실제 "${corporationType}"`);
+                                if (!corporationType.includes(data.법인구분)) {
+                                    console.log(`⚠️ 법인구분 불일치: 예상 "${data.법인구분}", 실제 "${corporationType}"`);
+                                    console.log(`⚠️ 법인구분이 일치하지 않아 다음 행으로 넘어갑니다.`);
+                                    continue; // 다음 행으로
+                                } else {
+                                    console.log(`✅ 법인구분 일치: "${data.법인구분}"`);
+                                }
+                            } else {
+                                console.log(`ℹ️ 법인구분이 없어서 건너뜀`);
+                            }
+                            
+                            // 3. 관할등기소가 있으면 확인 (5번째 컬럼, 인덱스 4)
+                            if (data.등기소 && data.등기소.trim()) {
+                                const registryOffice = cells.length > 4 ? cells[4].textContent.trim() : '';
+                                console.log(`🔍 관할등기소 확인 중: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
+                                if (!registryOffice.includes(data.등기소)) {
+                                    console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
+                                    console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
+                                    continue; // 다음 행으로
+                                } else {
+                                    console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
+                                }
+                            } else {
+                                console.log(`ℹ️ 관할등기소가 없어서 건너뜀`);
+                            }
+                            
+                            // 4. 모든 조건이 일치하면 체크박스 클릭 (1번째 컬럼, 인덱스 0)
+                            console.log(`✅ 모든 조건이 일치합니다. 체크박스 찾는 중...`);
+                            const checkbox = cells.length > 0 ? cells[0].querySelector('input[type="checkbox"]') : null;
+                            if (checkbox) {
+                                console.log(`✅ 체크박스 발견, 클릭 시도...`);
+                                checkbox.click();
+                                console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
+                                return true;
+                            } else {
+                                console.log(`❌ 체크박스를 찾을 수 없음 (행 ${i})`);
+                            }
                         }
                     }
                 }
@@ -946,6 +1076,9 @@ class IROSFindAutomation {
                     console.log(`✅ 이미 열려있는 새 탭 발견: ${newPage.url()}`);
                 } else {
                     console.log('❌ 새 탭이 열리지 않았습니다. 현재 페이지에서 처리합니다.');
+                    // 새 탭이 열리지 않았을 때 이전 페이지로 돌아가기
+                    console.log('🔙 새 탭이 열리지 않아 이전 페이지로 돌아갑니다...');
+                    await this.goToPreviousPage();
                     return; // 새 탭이 없으면 그냥 종료
                 }
             }
@@ -1221,49 +1354,108 @@ class IROSFindAutomation {
             console.log(`🔍 현재 페이지 URL: ${this.page.url()}`);
             console.log(`🔍 현재 페이지 제목: ${await this.page.title()}`);
             
-            // 이전 목록 페이지 버튼 클릭 (XPath 사용)
-            const prevButton = this.page.locator('//*[@id="mf_wfm_potal_main_wfm_content_pgl_single2_prevPage_btn"]/a');
+            // 현재 페이지가 관심등기 관리 페이지인지 확인
+            const currentTitle = await this.page.title();
+            const currentUrl = this.page.url();
             
-            // 🔍 디버깅: 버튼 상태 확인
-            const isVisible = await prevButton.isVisible();
-            const isEnabled = await prevButton.isEnabled();
-            console.log(`🔍 이전 페이지 버튼 상태 - 보임: ${isVisible}, 활성화: ${isEnabled}`);
-            
-            if (isVisible) {
-                console.log('🖱️ 이전 페이지 버튼 클릭 실행...');
-                await prevButton.click();
-                await this.waitWithTimeout(CONFIG.TIMEOUTS.LOADING);
-                console.log('✅ 이전 목록 페이지로 돌아갔습니다.');
-                
-                // 🔍 디버깅: 이동 후 상태 확인
-                console.log(`🔍 이동 후 페이지 URL: ${this.page.url()}`);
-                console.log(`🔍 이동 후 페이지 제목: ${await this.page.title()}`);
-                
+            if (!currentTitle.includes('관심등기 관리') && !currentUrl.includes('interest')) {
+                console.log('⚠️ 현재 페이지가 관심등기 관리 페이지가 아닙니다. 관심등기 관리 페이지로 이동합니다...');
+                await this.navigateToInterestRegistry();
                 return true;
-            } else {
-                console.log('⚠️ 이전 목록 페이지 버튼을 찾을 수 없습니다.');
-                
-                // 🔍 디버깅: 다른 방법으로 버튼 찾기
-                const allButtons = await this.page.locator('a').all();
-                console.log(`🔍 페이지의 모든 링크 수: ${allButtons.length}`);
-                
-                for (let i = 0; i < allButtons.length; i++) {
-                    const button = allButtons[i];
-                    const text = await button.textContent();
-                    const isVisible = await button.isVisible();
-                    console.log(`  링크 ${i + 1}: "${text}" (보임: ${isVisible})`);
+            }
+            
+            // 여러 방법으로 이전 페이지 버튼 찾기
+            let prevButton = null;
+            
+            // 방법 1: ID로 찾기
+            try {
+                prevButton = this.page.locator('#mf_wfm_potal_main_wfm_content_pgl_single2_prevPage_btn a');
+                if (await prevButton.isVisible()) {
+                    console.log('✅ ID로 이전 페이지 버튼을 찾았습니다.');
+                } else {
+                    prevButton = null;
+                }
+            } catch (e) {
+                prevButton = null;
+            }
+            
+            // 방법 2: XPath로 찾기 (수정된 버전)
+            if (!prevButton) {
+                try {
+                    prevButton = this.page.locator('xpath=//a[contains(@onclick, "prevPage") or contains(@href, "prev")]');
+                    if (await prevButton.isVisible()) {
+                        console.log('✅ XPath로 이전 페이지 버튼을 찾았습니다.');
+                    } else {
+                        prevButton = null;
+                    }
+                } catch (e) {
+                    prevButton = null;
+                }
+            }
+            
+            // 방법 3: 텍스트로 찾기
+            if (!prevButton) {
+                try {
+                    prevButton = this.page.getByRole('link', { name: '이전 페이지' });
+                    if (await prevButton.isVisible()) {
+                        console.log('✅ 텍스트로 이전 페이지 버튼을 찾았습니다.');
+                    } else {
+                        prevButton = null;
+                    }
+                } catch (e) {
+                    prevButton = null;
+                }
+            }
+            
+            // 방법 4: 모든 링크에서 "이전" 텍스트 찾기
+            if (!prevButton) {
+                try {
+                    const allLinks = await this.page.locator('a').all();
+                    console.log(`🔍 페이지의 모든 링크 수: ${allLinks.length}`);
                     
-                    if (text && (text.includes('이전') || text.includes('prev')) && isVisible) {
-                        console.log(`✅ 이전 버튼을 다른 방법으로 찾았습니다: "${text}"`);
-                        await button.click();
+                    for (let i = 0; i < allLinks.length; i++) {
+                        const link = allLinks[i];
+                        const text = await link.textContent();
+                        const isVisible = await link.isVisible();
+                        
+                        if (text && (text.includes('이전') || text.includes('prev') || text.includes('◀')) && isVisible) {
+                            console.log(`✅ 링크에서 이전 버튼을 찾았습니다: "${text}"`);
+                            prevButton = link;
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    console.log('⚠️ 링크 검색 중 오류:', e.message);
+                }
+            }
+            
+            // 버튼 클릭 시도
+            if (prevButton) {
+                try {
+                    const isVisible = await prevButton.isVisible();
+                    const isEnabled = await prevButton.isEnabled();
+                    console.log(`🔍 이전 페이지 버튼 상태 - 보임: ${isVisible}, 활성화: ${isEnabled}`);
+                    
+                    if (isVisible) {
+                        console.log('🖱️ 이전 페이지 버튼 클릭 실행...');
+                        await prevButton.click();
                         await this.waitWithTimeout(CONFIG.TIMEOUTS.LOADING);
-                        console.log('✅ 대체 방법으로 이전 페이지 이동 완료');
+                        console.log('✅ 이전 목록 페이지로 돌아갔습니다.');
+                        
+                        // 🔍 디버깅: 이동 후 상태 확인
+                        console.log(`🔍 이동 후 페이지 URL: ${this.page.url()}`);
+                        console.log(`🔍 이동 후 페이지 제목: ${await this.page.title()}`);
+                        
                         return true;
                     }
+                } catch (clickError) {
+                    console.log('❌ 이전 페이지 버튼 클릭 실패:', clickError.message);
                 }
-                
-                return false;
             }
+            
+            console.log('⚠️ 이전 목록 페이지 버튼을 찾을 수 없습니다.');
+            return false;
+            
         } catch (error) {
             console.log('❌ 이전 목록 페이지 이동 실패:', error.message);
             console.log('🔍 오류 상세 정보:', error);
@@ -1277,24 +1469,25 @@ class IROSFindAutomation {
         console.log(`📋 검색 조건: 등기상호="${companyData.등기상호}", 법인구분="${companyData.법인구분 || '없음'}", 관할등기소="${companyData.등기소 || '없음'}"`);
         
         try {
-            // 1. 법인 찾기
+            // 1. 법인 찾기 및 선택 (체크박스 클릭까지 포함)
             const found = await this.findCompany(companyData);
             if (!found) {
                 console.log(`❌ "${companyData.등기상호}" 법인을 찾을 수 없습니다.`);
-                // 마지막 페이지에서 다음 상호로 넘어갈 때 이전 목록 페이지로 돌아가기
-                await this.goToPreviousPage();
-                return false;
-            }
-            
-            // 2. 법인 선택
-            const selected = await this.selectCompany(companyData);
-            if (!selected) {
-                console.log(`❌ "${companyData.등기상호}" 법인 선택 실패`);
-                // 법인 선택 실패 시 이전 페이지로 돌아가기
+                // 법인을 찾지 못했을 때 이전 페이지로 돌아가기
                 console.log('🔙 이전 페이지로 돌아가는 중...');
                 await this.goToPreviousPage();
                 return false;
             }
+            
+            // 2. 체크박스가 실제로 체크되었는지 확인
+            const checkedBoxes = await this.page.locator('input[type="checkbox"]:checked').all();
+            if (checkedBoxes.length === 0) {
+                console.log(`❌ "${companyData.등기상호}" 체크박스가 실제로 체크되지 않았습니다.`);
+                console.log('🔙 이전 페이지로 돌아가는 중...');
+                await this.goToPreviousPage();
+                return false;
+            }
+            console.log(`✅ "${companyData.등기상호}" 체크박스가 성공적으로 체크되었습니다.`);
             
             // 3. 열람/발급 버튼 클릭
             const viewClicked = await this.clickViewIssueButton();
@@ -1311,10 +1504,16 @@ class IROSFindAutomation {
             }
             
             // 5. 새 탭에서 로딩 완료 후 원래 탭으로 돌아가기
-            await this.waitForNewTabAndReturn();
-            
-            console.log(`✅ "${companyData.등기상호}" 법인 처리 완료 (결제대상확인 페이지까지 완료)`);
-            return true;
+            try {
+                await this.waitForNewTabAndReturn();
+                console.log(`✅ "${companyData.등기상호}" 법인 처리 완료 (결제대상확인 페이지까지 완료)`);
+                return true;
+            } catch (error) {
+                console.log(`⚠️ 새 탭 처리 중 오류: ${error.message}`);
+                console.log('🔙 새 탭 처리 실패로 이전 페이지로 돌아갑니다...');
+                await this.goToPreviousPage();
+                return false;
+            }
             
         } catch (error) {
             console.log(`❌ "${companyData.등기상호}" 법인 처리 중 오류:`, error.message);
