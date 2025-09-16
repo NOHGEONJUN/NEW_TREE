@@ -557,8 +557,18 @@ class IROSFindAutomation {
                             if (checkbox) {
                                 console.log(`✅ 체크박스 발견, 클릭 시도...`);
                                 checkbox.click();
-                                console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
-                                return true;
+                                
+                                // 체크박스가 실제로 체크되었는지 확인
+                                const isChecked = checkbox.checked;
+                                console.log(`🔍 체크박스 클릭 후 상태: ${isChecked ? '체크됨' : '체크 안됨'}`);
+                                
+                                if (isChecked) {
+                                    console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
+                                    return true;
+                                } else {
+                                    console.log(`❌ 체크박스 클릭 실패: "${data.등기상호}"`);
+                                    return false;
+                                }
                             } else {
                                 console.log(`❌ 체크박스를 찾을 수 없음 (행 ${i})`);
                             }
@@ -764,8 +774,18 @@ class IROSFindAutomation {
                             if (checkbox) {
                                 console.log(`✅ 체크박스 발견, 클릭 시도...`);
                                 checkbox.click();
-                                console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
-                                return true;
+                                
+                                // 체크박스가 실제로 체크되었는지 확인
+                                const isChecked = checkbox.checked;
+                                console.log(`🔍 체크박스 클릭 후 상태: ${isChecked ? '체크됨' : '체크 안됨'}`);
+                                
+                                if (isChecked) {
+                                    console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
+                                    return true;
+                                } else {
+                                    console.log(`❌ 체크박스 클릭 실패: "${data.등기상호}"`);
+                                    return false;
+                                }
                             } else {
                                 console.log(`❌ 체크박스를 찾을 수 없음 (행 ${i})`);
                             }
@@ -1463,55 +1483,140 @@ class IROSFindAutomation {
         }
     }
 
+    // 1페이지로 이동
+    async goToFirstPage() {
+        try {
+            console.log('📄 1페이지로 이동 중...');
+            
+            // 🔍 디버깅: 현재 페이지 상태 확인
+            console.log(`🔍 현재 페이지 URL: ${this.page.url()}`);
+            console.log(`🔍 현재 페이지 제목: ${await this.page.title()}`);
+            
+            // 여러 방법으로 1페이지 버튼 찾기
+            let firstPageButton = null;
+            
+            // 방법 1: "1" 텍스트로 찾기
+            try {
+                firstPageButton = this.page.getByRole('link', { name: '1' });
+                if (await firstPageButton.isVisible()) {
+                    console.log('✅ 텍스트로 1페이지 버튼을 찾았습니다.');
+                } else {
+                    firstPageButton = null;
+                }
+            } catch (e) {
+                firstPageButton = null;
+            }
+            
+            // 방법 2: 모든 링크에서 "1" 텍스트 찾기
+            if (!firstPageButton) {
+                try {
+                    const allLinks = await this.page.locator('a').all();
+                    console.log(`🔍 페이지의 모든 링크 수: ${allLinks.length}`);
+                    
+                    for (let i = 0; i < allLinks.length; i++) {
+                        const link = allLinks[i];
+                        const text = await link.textContent();
+                        const isVisible = await link.isVisible();
+                        
+                        if (text && text.trim() === '1' && isVisible) {
+                            console.log(`✅ 링크에서 1페이지 버튼을 찾았습니다: "${text}"`);
+                            firstPageButton = link;
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    console.log('⚠️ 링크 검색 중 오류:', e.message);
+                }
+            }
+            
+            // 버튼 클릭 시도
+            if (firstPageButton) {
+                try {
+                    const isVisible = await firstPageButton.isVisible();
+                    const isEnabled = await firstPageButton.isEnabled();
+                    console.log(`🔍 1페이지 버튼 상태 - 보임: ${isVisible}, 활성화: ${isEnabled}`);
+                    
+                    if (isVisible) {
+                        console.log('🖱️ 1페이지 버튼 클릭 실행...');
+                        await firstPageButton.click();
+                        await this.waitWithTimeout(CONFIG.TIMEOUTS.LOADING);
+                        console.log('✅ 1페이지로 이동했습니다.');
+                        
+                        // 🔍 디버깅: 이동 후 상태 확인
+                        console.log(`🔍 이동 후 페이지 URL: ${this.page.url()}`);
+                        console.log(`🔍 이동 후 페이지 제목: ${await this.page.title()}`);
+                        
+                        return true;
+                    }
+                } catch (clickError) {
+                    console.log('❌ 1페이지 버튼 클릭 실패:', clickError.message);
+                }
+            }
+            
+            console.log('⚠️ 1페이지 버튼을 찾을 수 없습니다.');
+            return false;
+            
+        } catch (error) {
+            console.log('❌ 1페이지 이동 실패:', error.message);
+            console.log('🔍 오류 상세 정보:', error);
+            return false;
+        }
+    }
+
     // 단일 법인 처리
     async processCompany(companyData) {
         console.log(`\n🏢 "${companyData.등기상호}" 법인 처리 시작`);
         console.log(`📋 검색 조건: 등기상호="${companyData.등기상호}", 법인구분="${companyData.법인구분 || '없음'}", 관할등기소="${companyData.등기소 || '없음'}"`);
         
         try {
-            // 1. 법인 찾기 및 선택 (체크박스 클릭까지 포함)
+            // 1. 1페이지로 이동 (새로운 법인 처리를 위해)
+            console.log('📄 새로운 법인 처리를 위해 1페이지로 이동합니다...');
+            await this.goToFirstPage();
+            
+            // 2. 법인 찾기 및 선택 (체크박스 클릭까지 포함)
             const found = await this.findCompany(companyData);
             if (!found) {
                 console.log(`❌ "${companyData.등기상호}" 법인을 찾을 수 없습니다.`);
-                // 법인을 찾지 못했을 때 이전 페이지로 돌아가기
-                console.log('🔙 이전 페이지로 돌아가는 중...');
+                // 법인을 찾지 못했을 때 이전 페이지로 돌아가서 1페이지로 이동
+                console.log('🔙 법인을 찾지 못해 이전 페이지로 돌아가서 1페이지로 이동합니다...');
                 await this.goToPreviousPage();
+                await this.goToFirstPage();
                 return false;
             }
             
-            // 2. 체크박스가 실제로 체크되었는지 확인
-            const checkedBoxes = await this.page.locator('input[type="checkbox"]:checked').all();
-            if (checkedBoxes.length === 0) {
-                console.log(`❌ "${companyData.등기상호}" 체크박스가 실제로 체크되지 않았습니다.`);
-                console.log('🔙 이전 페이지로 돌아가는 중...');
-                await this.goToPreviousPage();
-                return false;
-            }
+            // 3. findCompany에서 이미 체크박스 상태를 확인했으므로 추가 확인 불필요
             console.log(`✅ "${companyData.등기상호}" 체크박스가 성공적으로 체크되었습니다.`);
             
-            // 3. 열람/발급 버튼 클릭
+            // 4. 열람/발급 버튼 클릭
             const viewClicked = await this.clickViewIssueButton();
             if (!viewClicked) {
                 console.log(`❌ "${companyData.등기상호}" 열람/발급 버튼 클릭 실패`);
                 return false;
             }
             
-            // 4. 확인 버튼 클릭 및 새 탭 처리
+            // 5. 확인 버튼 클릭 및 새 탭 처리
             const confirmed = await this.confirmDetailsPopup();
             if (!confirmed) {
                 console.log(`❌ "${companyData.등기상호}" 확인 버튼 클릭 실패`);
                 return false;
             }
             
-            // 5. 새 탭에서 로딩 완료 후 원래 탭으로 돌아가기
+            // 6. 새 탭에서 로딩 완료 후 원래 탭으로 돌아가기
             try {
                 await this.waitForNewTabAndReturn();
                 console.log(`✅ "${companyData.등기상호}" 법인 처리 완료 (결제대상확인 페이지까지 완료)`);
+                
+                // 7. 법인 처리 완료 후 이전 페이지로 돌아가서 1페이지로 이동
+                console.log('🔙 법인 처리 완료 후 이전 페이지로 돌아가서 1페이지로 이동합니다...');
+                await this.goToPreviousPage();
+                await this.goToFirstPage();
+                
                 return true;
             } catch (error) {
                 console.log(`⚠️ 새 탭 처리 중 오류: ${error.message}`);
-                console.log('🔙 새 탭 처리 실패로 이전 페이지로 돌아갑니다...');
+                console.log('🔙 새 탭 처리 실패로 이전 페이지로 돌아가서 1페이지로 이동합니다...');
                 await this.goToPreviousPage();
+                await this.goToFirstPage();
                 return false;
             }
             
