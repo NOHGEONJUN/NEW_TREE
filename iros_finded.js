@@ -168,9 +168,14 @@ class IROSFindAutomation {
         
         // 4단계: 페이지 완전 로딩 대기
         await this.page.waitForLoadState('domcontentloaded');
-        await this.waitWithTimeout(CONFIG.TIMEOUTS.DEFAULT); // 추가 로딩 시간
+        await this.waitWithTimeout(CONFIG.TIMEOUTS.DEFAULT);
         
-        // 5단계: 팝업 및 배너 정교하게 제거 (중요한 메뉴 보호)
+        // 5단계: 웹페이지 완전 로딩 확인
+        console.log('🔍 웹페이지 완전 로딩 확인 중...');
+        await this.waitForPageToBeReady();
+        console.log('✅ 웹페이지 로딩 완료 확인');
+        
+        // 6단계: 팝업 및 배너 정교하게 제거 (중요한 메뉴 보호)
         console.log('🧹 팝업 및 배너 제거 시작...');
         const removedCount = await this.page.evaluate(() => {
             let removedCount = 0;
@@ -1054,8 +1059,8 @@ class IROSFindAutomation {
         }
     }
 
-    // ✨ 간단하고 확실한 새 탭 처리 (Promise.all + waitForEvent 사용)
-    async waitForNewTabAndReturn() {
+    // 새 탭 처리 (로딩창 감지 및 완료 확인)
+    async waitForNewTabAndReturn(shouldCloseTab = true) {
         try {
             console.log('🔄 새 탭 처리 시작...');
             
@@ -1120,29 +1125,29 @@ class IROSFindAutomation {
             
             // 로딩창이 사라질 때까지 대기
             console.log('⏳ 새 탭에서 로딩창이 사라질 때까지 대기 중...');
-            await this.waitForLoadingToComplete();
+            await this.waitForLoadingToComplete(newPage);
             console.log('✅ 새 탭에서 로딩창 대기 완료');
             
-            // ✨ 새 탭 닫기
-            console.log('❌ 새 탭 닫기 중...');
-            await newPage.close();
-            console.log('✅ 새 탭 닫기 완료');
-            
-            // 🔍 디버깅: 새 탭 닫기 후 탭 상태 확인
-            const finalPages = context.pages();
-            console.log(`📊 새 탭 닫기 후 탭 수: ${finalPages.length}개`);
-            finalPages.forEach((page, index) => {
-                console.log(`  탭 ${index + 1}: ${page.url()}`);
-            });
-            
-            // ✨ 원래 탭으로 포커스 이동
-            console.log('🔙 원래 탭으로 포커스 이동 중...');
-            await this.page.bringToFront();
-            console.log('✅ 원래 탭 포커스 완료');
-            
-            // 이전에 선택했던 체크박스 해제
-            console.log('☑️ 이전에 선택했던 체크박스 해제 중...');
-            await this.uncheckPreviousSelection();
+            if (shouldCloseTab) {
+                // 새 탭 닫기
+                console.log('❌ 새 탭 닫기 중...');
+                await newPage.close();
+                console.log('✅ 새 탭 닫기 완료');
+                
+                // 원래 탭으로 포커스 이동
+                console.log('🔙 원래 탭으로 포커스 이동 중...');
+                await this.page.bringToFront();
+                console.log('✅ 원래 탭 포커스 완료');
+                
+                // 이전에 선택했던 체크박스 해제
+                console.log('☑️ 이전에 선택했던 체크박스 해제 중...');
+                await this.uncheckPreviousSelection();
+            } else {
+                // 마지막 법인: 새 탭 유지하고 원래 탭으로 포커스만 이동
+                console.log('🔙 원래 탭으로 포커스 이동 중... (새 탭 유지)');
+                await this.page.bringToFront();
+                console.log('✅ 원래 탭 포커스 완료 (새 탭 유지)');
+            }
             
             console.log('✅ 새 탭 처리 완료');
             
@@ -1169,70 +1174,47 @@ class IROSFindAutomation {
 
 
     // 새 탭에서 로딩창이 사라질 때까지 대기
-    async waitForLoadingToComplete() {
+    async waitForLoadingToComplete(targetPage = null) {
+        const page = targetPage || this.page;
         try {
-            console.log('⏳ 새 탭에서 로딩창 감지 중...');
+            console.log('⏳ 로딩창 감지 중...');
             
-            // 새 탭이 완전히 로드될 때까지 먼저 대기
-            await this.page.waitForLoadState('domcontentloaded');
-            console.log('✅ 새 탭 DOM 로딩 완료');
+            // 페이지 로딩 완료 대기
+            await page.waitForLoadState('domcontentloaded');
+            console.log('✅ 페이지 DOM 로딩 완료');
             
-            // 로딩창이 나타날 때까지 5초 대기
-            console.log('⏳ 로딩창이 나타날 때까지 5초 대기 중...');
-            await this.waitWithTimeout(5000);
-            
-            // 로딩 관련 요소들이 사라질 때까지 대기
-            let loadingElementsFound = true;
+            // 로딩창 감지 및 완료 확인
+            let loadingDetected = false;
             let attempts = 0;
-            const maxAttempts = 60; // 60초 대기 (1초 간격)
-            let consecutiveNoLoadingCount = 0; // 연속으로 로딩이 없는 횟수
-            const requiredConsecutiveCount = 3; // 3번 연속으로 로딩이 없어야 완료로 간주
+            const maxAttempts = 30; // 30초 대기 (1초 간격)
+            let consecutiveNoLoadingCount = 0;
+            const requiredConsecutiveCount = 2; // 2번 연속으로 로딩이 없어야 완료로 간주
             
-            while (loadingElementsFound && attempts < maxAttempts) {
+            while (attempts < maxAttempts) {
                 // 로딩 관련 요소들 확인
-                const hasLoadingElements = await this.page.evaluate(() => {
-                    // 정확한 로딩창 요소 확인 (processMsgLayer)
-                    const processMsgLayer = document.querySelector('#processMsgLayer');
-                    if (processMsgLayer && processMsgLayer.offsetParent !== null) {
-                        console.log('로딩창 발견: #processMsgLayer');
-                        return true;
-                    }
-                    
-                    // pro_loading 클래스 확인
-                    const proLoading = document.querySelector('.pro_loading');
-                    if (proLoading && proLoading.offsetParent !== null) {
-                        console.log('로딩창 발견: .pro_loading');
-                        return true;
-                    }
-                    
-                    // 다양한 로딩 요소들 확인 (백업)
+                const hasLoadingElements = await page.evaluate(() => {
+                    // 주요 로딩창 요소들 확인
                     const loadingSelectors = [
+                        '#processMsgLayer',
+                        '.pro_loading',
                         '[class*="loading"]',
-                        '[class*="spinner"]',
-                        '[class*="loader"]',
                         '[id*="loading"]',
-                        '[id*="spinner"]',
-                        '[id*="loader"]',
                         '.loading',
                         '.spinner',
                         '.loader'
                     ];
                     
                     for (const selector of loadingSelectors) {
-                        try {
-                            const element = document.querySelector(selector);
-                            if (element && element.offsetParent !== null) {
-                                console.log(`로딩 요소 발견: ${selector}`);
-                                return true;
-                            }
-                        } catch (e) {
-                            // selector 오류 무시
+                        const element = document.querySelector(selector);
+                        if (element && element.offsetParent !== null) {
+                            console.log(`로딩 요소 발견: ${selector}`);
+                            return true;
                         }
                     }
                     
-                    // 텍스트 기반 로딩 감지
+                    // 로딩 텍스트 확인
                     const bodyText = document.body.textContent || '';
-                    const loadingTexts = ['로딩중', 'Loading', '처리중', '처리 중입니다.', '잠시만 기다려주세요', '처리중입니다.'];
+                    const loadingTexts = ['처리중입니다', '로딩중', 'Loading', '처리 중입니다', '잠시만 기다려주세요'];
                     
                     for (const text of loadingTexts) {
                         if (bodyText.includes(text)) {
@@ -1241,58 +1223,47 @@ class IROSFindAutomation {
                         }
                     }
                     
-                    // 추가 로딩 패턴 확인
-                    const loadingPatterns = [
-                        /처리중입니다?\.?/i,
-                        /로딩중입니다?\.?/i,
-                        /진행중입니다?\.?/i,
-                        /잠시만\s*기다려주세요/i
-                    ];
-                    
-                    for (const pattern of loadingPatterns) {
-                        if (pattern.test(bodyText)) {
-                            console.log(`로딩 패턴 발견: ${pattern}`);
-                            return true;
-                        }
-                    }
-                    
                     return false;
                 });
                 
                 if (hasLoadingElements) {
-                    console.log(`🔍 로딩 요소 감지됨 (시도 ${attempts + 1}/${maxAttempts})`);
-                    consecutiveNoLoadingCount = 0; // 로딩이 있으면 카운트 리셋
-                    await this.waitWithTimeout(1000); // 1초 대기
-                    attempts++;
+                    if (!loadingDetected) {
+                        console.log('🔍 로딩창 감지됨');
+                        loadingDetected = true;
+                    }
+                    consecutiveNoLoadingCount = 0;
+                    console.log(`⏳ 로딩 중... (${attempts + 1}/${maxAttempts})`);
                 } else {
                     consecutiveNoLoadingCount++;
-                    console.log(`🔍 로딩 요소 없음 (연속 ${consecutiveNoLoadingCount}/${requiredConsecutiveCount})`);
+                    if (loadingDetected) {
+                        console.log(`✅ 로딩 완료 확인 중... (${consecutiveNoLoadingCount}/${requiredConsecutiveCount})`);
+                    }
                     
                     if (consecutiveNoLoadingCount >= requiredConsecutiveCount) {
-                        loadingElementsFound = false;
-                        console.log('✅ 로딩창이 완전히 사라졌습니다.');
-                    } else {
-                        await this.waitWithTimeout(1000); // 1초 대기
-                        attempts++;
+                        if (loadingDetected) {
+                            console.log('✅ 로딩창이 완전히 사라졌습니다.');
+                        } else {
+                            console.log('✅ 로딩창이 감지되지 않았습니다.');
+                        }
+                        break;
                     }
                 }
+                
+                await this.waitWithTimeout(1000);
+                attempts++;
             }
             
             if (attempts >= maxAttempts) {
-                console.log('⚠️ 로딩창 감지 타임아웃 (60초) - 계속 진행합니다.');
+                console.log('⚠️ 로딩창 감지 타임아웃 (30초) - 계속 진행합니다.');
             }
             
-            // 추가 안전 대기
-            console.log('⏳ 안전을 위해 추가 대기 중... (3초)');
-            await this.waitWithTimeout(3000);
-            
-            console.log('✅ 새 탭 로딩 완료 - 다음 법인 처리가 가능합니다.');
+            // 안전 대기
+            await this.waitWithTimeout(2000);
+            console.log('✅ 로딩 완료');
             
         } catch (error) {
             console.log('⚠️ 로딩창 감지 중 오류:', error.message);
-            // 오류가 발생해도 충분한 시간 대기
-            console.log('⏳ 안전을 위해 추가 대기 중... (5초)');
-            await this.waitWithTimeout(5000);
+            await this.waitWithTimeout(3000);
         }
     }
 
@@ -1564,7 +1535,7 @@ class IROSFindAutomation {
     }
 
     // 단일 법인 처리
-    async processCompany(companyData) {
+    async processCompany(companyData, isLastCompany = false) {
         console.log(`\n🏢 "${companyData.등기상호}" 법인 처리 시작`);
         console.log(`📋 검색 조건: 등기상호="${companyData.등기상호}", 법인구분="${companyData.법인구분 || '없음'}", 관할등기소="${companyData.등기소 || '없음'}"`);
         
@@ -1603,20 +1574,29 @@ class IROSFindAutomation {
             
             // 6. 새 탭에서 로딩 완료 후 원래 탭으로 돌아가기
             try {
-                await this.waitForNewTabAndReturn();
-                console.log(`✅ "${companyData.등기상호}" 법인 처리 완료 (결제대상확인 페이지까지 완료)`);
-                
-                // 7. 법인 처리 완료 후 이전 페이지로 돌아가서 1페이지로 이동
-                console.log('🔙 법인 처리 완료 후 이전 페이지로 돌아가서 1페이지로 이동합니다...');
-                await this.goToPreviousPage();
-                await this.goToFirstPage();
+                if (isLastCompany) {
+                    // 마지막 법인: 새 탭 닫지 않고 로딩만 대기
+                    await this.waitForNewTabAndReturn(false);
+                    console.log(`✅ "${companyData.등기상호}" 법인 처리 완료 (마지막 법인 - 새 탭 유지)`);
+                } else {
+                    // 일반 법인: 새 탭 닫고 이전 페이지로 이동
+                    await this.waitForNewTabAndReturn(true);
+                    console.log(`✅ "${companyData.등기상호}" 법인 처리 완료`);
+                    
+                    // 7. 법인 처리 완료 후 이전 페이지로 돌아가서 1페이지로 이동
+                    console.log('🔙 이전 페이지로 돌아가서 1페이지로 이동합니다...');
+                    await this.goToPreviousPage();
+                    await this.goToFirstPage();
+                }
                 
                 return true;
             } catch (error) {
                 console.log(`⚠️ 새 탭 처리 중 오류: ${error.message}`);
-                console.log('🔙 새 탭 처리 실패로 이전 페이지로 돌아가서 1페이지로 이동합니다...');
-                await this.goToPreviousPage();
-                await this.goToFirstPage();
+                if (!isLastCompany) {
+                    console.log('🔙 이전 페이지로 돌아가서 1페이지로 이동합니다...');
+                    await this.goToPreviousPage();
+                    await this.goToFirstPage();
+                }
                 return false;
             }
             
@@ -1635,9 +1615,10 @@ class IROSFindAutomation {
         
         for (let i = 0; i < companies.length; i++) {
             const company = companies[i];
+            const isLastCompany = (i === companies.length - 1);
             console.log(`\n📊 진행률: ${i + 1}/${companies.length}`);
             
-            const success = await this.processCompany(company);
+            const success = await this.processCompany(company, isLastCompany);
             if (success) {
                 successCount++;
             } else {
@@ -1756,6 +1737,61 @@ class IROSFindAutomation {
                 resolve();
             });
         });
+    }
+
+    // 웹페이지 완전 로딩 확인
+    async waitForPageToBeReady() {
+        try {
+            console.log('⏳ 웹페이지 완전 로딩 대기 중...');
+            
+            // 1. DOM이 완전히 로드될 때까지 대기
+            await this.page.waitForLoadState('domcontentloaded');
+            
+            // 2. 네트워크가 안정될 때까지 대기
+            await this.page.waitForLoadState('networkidle');
+            
+            // 3. 주요 요소들이 로드될 때까지 대기
+            await this.page.waitForSelector('body', { timeout: 10000 });
+            
+            // 4. 페이지가 완전히 렌더링될 때까지 추가 대기
+            await this.waitWithTimeout(2000);
+            
+            // 5. 페이지 상태 확인
+            const pageReady = await this.page.evaluate(() => {
+                // document.readyState 확인
+                if (document.readyState !== 'complete') {
+                    console.log(`문서 상태: ${document.readyState}`);
+                    return false;
+                }
+                
+                // body 요소가 있는지 확인
+                if (!document.body) {
+                    console.log('body 요소가 없습니다');
+                    return false;
+                }
+                
+                // 기본적인 페이지 구조 확인
+                const hasContent = document.body.children.length > 0;
+                if (!hasContent) {
+                    console.log('페이지 내용이 없습니다');
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            if (!pageReady) {
+                console.log('⚠️ 페이지가 완전히 로드되지 않았습니다. 추가 대기 중...');
+                await this.waitWithTimeout(3000);
+            }
+            
+            console.log('✅ 웹페이지 완전 로딩 확인 완료');
+            
+        } catch (error) {
+            console.log('⚠️ 웹페이지 로딩 확인 중 오류:', error.message);
+            // 오류가 발생해도 기본 대기 시간은 확보
+            await this.waitWithTimeout(5000);
+        }
     }
 
     // 유틸리티 메서드들
