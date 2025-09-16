@@ -522,60 +522,60 @@ class IROSFindAutomation {
                     if (cells.length > companyNameColumnIndex) {
                         const companyName = cells[companyNameColumnIndex].textContent.trim();
                         if (companyName.includes(data.등기상호)) {
-                            console.log(`✅ 등기상호 "${data.등기상호}" 발견 (행 ${i})`);
-                            console.log(`📋 행 내용: "${rowText}"`);
-                            console.log(`🔍 검색 조건 - 등기상호: "${data.등기상호}", 법인구분: "${data.법인구분 || '없음'}", 관할등기소: "${data.등기소 || '없음'}"`);
-                            
+                        console.log(`✅ 등기상호 "${data.등기상호}" 발견 (행 ${i})`);
+                        console.log(`📋 행 내용: "${rowText}"`);
+                        console.log(`🔍 검색 조건 - 등기상호: "${data.등기상호}", 법인구분: "${data.법인구분 || '없음'}", 관할등기소: "${data.등기소 || '없음'}"`);
+                        
                             // 2. 법인구분이 있으면 확인 (4번째 컬럼, 인덱스 3)
-                            if (data.법인구분 && data.법인구분.trim()) {
+                        if (data.법인구분 && data.법인구분.trim()) {
                                 const corporationType = cells.length > 3 ? cells[3].textContent.trim() : '';
                                 console.log(`🔍 법인구분 확인 중: 예상 "${data.법인구분}", 실제 "${corporationType}"`);
                                 if (!corporationType.includes(data.법인구분)) {
                                     console.log(`⚠️ 법인구분 불일치: 예상 "${data.법인구분}", 실제 "${corporationType}"`);
-                                    console.log(`⚠️ 법인구분이 일치하지 않아 다음 행으로 넘어갑니다.`);
-                                    continue; // 다음 행으로
-                                } else {
-                                    console.log(`✅ 법인구분 일치: "${data.법인구분}"`);
-                                }
+                                console.log(`⚠️ 법인구분이 일치하지 않아 다음 행으로 넘어갑니다.`);
+                                continue; // 다음 행으로
                             } else {
-                                console.log(`ℹ️ 법인구분이 없어서 건너뜀`);
+                                console.log(`✅ 법인구분 일치: "${data.법인구분}"`);
                             }
-                            
+                        } else {
+                            console.log(`ℹ️ 법인구분이 없어서 건너뜀`);
+                        }
+                        
                             // 3. 관할등기소가 있으면 확인 (5번째 컬럼, 인덱스 4)
-                            if (data.등기소 && data.등기소.trim()) {
+                        if (data.등기소 && data.등기소.trim()) {
                                 const registryOffice = cells.length > 4 ? cells[4].textContent.trim() : '';
                                 console.log(`🔍 관할등기소 확인 중: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
                                 if (!registryOffice.includes(data.등기소)) {
                                     console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
-                                    console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
-                                    continue; // 다음 행으로
-                                } else {
-                                    console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
-                                }
+                                console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
+                                continue; // 다음 행으로
                             } else {
-                                console.log(`ℹ️ 관할등기소가 없어서 건너뜀`);
+                                console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
                             }
-                            
+                        } else {
+                            console.log(`ℹ️ 관할등기소가 없어서 건너뜀`);
+                        }
+                        
                             // 4. 모든 조건이 일치하면 체크박스 클릭 (1번째 컬럼, 인덱스 0)
-                            console.log(`✅ 모든 조건이 일치합니다. 체크박스 찾는 중...`);
+                        console.log(`✅ 모든 조건이 일치합니다. 체크박스 찾는 중...`);
                             const checkbox = cells.length > 0 ? cells[0].querySelector('input[type="checkbox"]') : null;
-                            if (checkbox) {
-                                console.log(`✅ 체크박스 발견, 클릭 시도...`);
-                                checkbox.click();
+                        if (checkbox) {
+                            console.log(`✅ 체크박스 발견, 클릭 시도...`);
+                            checkbox.click();
                                 
                                 // 체크박스가 실제로 체크되었는지 확인
                                 const isChecked = checkbox.checked;
                                 console.log(`🔍 체크박스 클릭 후 상태: ${isChecked ? '체크됨' : '체크 안됨'}`);
                                 
                                 if (isChecked) {
-                                    console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
-                                    return true;
+                            console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
+                            return true;
                                 } else {
                                     console.log(`❌ 체크박스 클릭 실패: "${data.등기상호}"`);
                                     return false;
                                 }
-                            } else {
-                                console.log(`❌ 체크박스를 찾을 수 없음 (행 ${i})`);
+                        } else {
+                            console.log(`❌ 체크박스를 찾을 수 없음 (행 ${i})`);
                             }
                         }
                     }
@@ -739,60 +739,60 @@ class IROSFindAutomation {
                     if (cells.length > companyNameColumnIndex) {
                         const companyName = cells[companyNameColumnIndex].textContent.trim();
                         if (companyName.includes(data.등기상호)) {
-                            console.log(`✅ 등기상호 "${data.등기상호}" 발견 (행 ${i})`);
-                            console.log(`📋 행 내용: "${rowText}"`);
-                            console.log(`🔍 검색 조건 - 등기상호: "${data.등기상호}", 법인구분: "${data.법인구분 || '없음'}", 관할등기소: "${data.등기소 || '없음'}"`);
-                            
+                        console.log(`✅ 등기상호 "${data.등기상호}" 발견 (행 ${i})`);
+                        console.log(`📋 행 내용: "${rowText}"`);
+                        console.log(`🔍 검색 조건 - 등기상호: "${data.등기상호}", 법인구분: "${data.법인구분 || '없음'}", 관할등기소: "${data.등기소 || '없음'}"`);
+                        
                             // 2. 법인구분이 있으면 확인 (4번째 컬럼, 인덱스 3)
-                            if (data.법인구분 && data.법인구분.trim()) {
+                        if (data.법인구분 && data.법인구분.trim()) {
                                 const corporationType = cells.length > 3 ? cells[3].textContent.trim() : '';
                                 console.log(`🔍 법인구분 확인 중: 예상 "${data.법인구분}", 실제 "${corporationType}"`);
                                 if (!corporationType.includes(data.법인구분)) {
                                     console.log(`⚠️ 법인구분 불일치: 예상 "${data.법인구분}", 실제 "${corporationType}"`);
-                                    console.log(`⚠️ 법인구분이 일치하지 않아 다음 행으로 넘어갑니다.`);
-                                    continue; // 다음 행으로
-                                } else {
-                                    console.log(`✅ 법인구분 일치: "${data.법인구분}"`);
-                                }
+                                console.log(`⚠️ 법인구분이 일치하지 않아 다음 행으로 넘어갑니다.`);
+                                continue; // 다음 행으로
                             } else {
-                                console.log(`ℹ️ 법인구분이 없어서 건너뜀`);
+                                console.log(`✅ 법인구분 일치: "${data.법인구분}"`);
                             }
-                            
+                        } else {
+                            console.log(`ℹ️ 법인구분이 없어서 건너뜀`);
+                        }
+                        
                             // 3. 관할등기소가 있으면 확인 (5번째 컬럼, 인덱스 4)
-                            if (data.등기소 && data.등기소.trim()) {
+                        if (data.등기소 && data.등기소.trim()) {
                                 const registryOffice = cells.length > 4 ? cells[4].textContent.trim() : '';
                                 console.log(`🔍 관할등기소 확인 중: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
                                 if (!registryOffice.includes(data.등기소)) {
                                     console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
-                                    console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
-                                    continue; // 다음 행으로
-                                } else {
-                                    console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
-                                }
+                                console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
+                                continue; // 다음 행으로
                             } else {
-                                console.log(`ℹ️ 관할등기소가 없어서 건너뜀`);
+                                console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
                             }
-                            
+                        } else {
+                            console.log(`ℹ️ 관할등기소가 없어서 건너뜀`);
+                        }
+                        
                             // 4. 모든 조건이 일치하면 체크박스 클릭 (1번째 컬럼, 인덱스 0)
-                            console.log(`✅ 모든 조건이 일치합니다. 체크박스 찾는 중...`);
+                        console.log(`✅ 모든 조건이 일치합니다. 체크박스 찾는 중...`);
                             const checkbox = cells.length > 0 ? cells[0].querySelector('input[type="checkbox"]') : null;
-                            if (checkbox) {
-                                console.log(`✅ 체크박스 발견, 클릭 시도...`);
-                                checkbox.click();
+                        if (checkbox) {
+                            console.log(`✅ 체크박스 발견, 클릭 시도...`);
+                            checkbox.click();
                                 
                                 // 체크박스가 실제로 체크되었는지 확인
                                 const isChecked = checkbox.checked;
                                 console.log(`🔍 체크박스 클릭 후 상태: ${isChecked ? '체크됨' : '체크 안됨'}`);
                                 
                                 if (isChecked) {
-                                    console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
-                                    return true;
+                            console.log(`✅ 체크박스 클릭 완료: "${data.등기상호}"`);
+                            return true;
                                 } else {
                                     console.log(`❌ 체크박스 클릭 실패: "${data.등기상호}"`);
                                     return false;
                                 }
-                            } else {
-                                console.log(`❌ 체크박스를 찾을 수 없음 (행 ${i})`);
+                        } else {
+                            console.log(`❌ 체크박스를 찾을 수 없음 (행 ${i})`);
                             }
                         }
                     }
@@ -1130,18 +1130,18 @@ class IROSFindAutomation {
             
             if (shouldCloseTab) {
                 // 새 탭 닫기
-                console.log('❌ 새 탭 닫기 중...');
-                await newPage.close();
-                console.log('✅ 새 탭 닫기 완료');
-                
+            console.log('❌ 새 탭 닫기 중...');
+            await newPage.close();
+            console.log('✅ 새 탭 닫기 완료');
+            
                 // 원래 탭으로 포커스 이동
-                console.log('🔙 원래 탭으로 포커스 이동 중...');
-                await this.page.bringToFront();
-                console.log('✅ 원래 탭 포커스 완료');
-                
-                // 이전에 선택했던 체크박스 해제
-                console.log('☑️ 이전에 선택했던 체크박스 해제 중...');
-                await this.uncheckPreviousSelection();
+            console.log('🔙 원래 탭으로 포커스 이동 중...');
+            await this.page.bringToFront();
+            console.log('✅ 원래 탭 포커스 완료');
+            
+            // 이전에 선택했던 체크박스 해제
+            console.log('☑️ 이전에 선택했던 체크박스 해제 중...');
+            await this.uncheckPreviousSelection();
             } else {
                 // 마지막 법인: 새 탭 유지하고 원래 탭으로 포커스만 이동
                 console.log('🔙 원래 탭으로 포커스 이동 중... (새 탭 유지)');
@@ -1183,42 +1183,50 @@ class IROSFindAutomation {
             await page.waitForLoadState('domcontentloaded');
             console.log('✅ 페이지 DOM 로딩 완료');
             
-            // 로딩창 감지 및 완료 확인
+            // 1단계: 로딩창이 나타날 때까지 대기
+            console.log('⏳ 로딩창이 나타날 때까지 대기 중...');
             let loadingDetected = false;
-            let attempts = 0;
-            const maxAttempts = 30; // 30초 대기 (1초 간격)
-            let consecutiveNoLoadingCount = 0;
-            const requiredConsecutiveCount = 2; // 2번 연속으로 로딩이 없어야 완료로 간주
+            let waitForLoadingAttempts = 0;
+            const maxWaitForLoadingAttempts = 10; // 10초 동안 로딩창 대기
             
-            while (attempts < maxAttempts) {
-                // 로딩 관련 요소들 확인
+            while (!loadingDetected && waitForLoadingAttempts < maxWaitForLoadingAttempts) {
                 const hasLoadingElements = await page.evaluate(() => {
-                    // 주요 로딩창 요소들 확인
+                    // 1. "처리 중입니다." 텍스트가 있는 요소 찾기
+                    const processingElements = document.querySelectorAll('*');
+                    for (const element of processingElements) {
+                        if (element.textContent && element.textContent.trim() === '처리 중입니다.') {
+                            // 요소가 화면에 보이는지 확인
+                            if (element.offsetParent !== null) {
+                                console.log('로딩창 감지: "처리 중입니다." 텍스트');
+                                return true;
+                            }
+                        }
+                    }
+                    
+                    // 2. 줄무늬 애니메이션이 있는 로딩창 찾기
+                    const animatedElements = document.querySelectorAll('*');
+                    for (const element of animatedElements) {
+                        const style = window.getComputedStyle(element);
+                        if (style.backgroundImage && style.backgroundImage.includes('linear-gradient')) {
+                            if (element.offsetParent !== null && element.offsetWidth > 100 && element.offsetHeight > 20) {
+                                console.log('로딩창 감지: 줄무늬 애니메이션');
+                                return true;
+                            }
+                        }
+                    }
+                    
+                    // 3. 기존 로딩창 요소들도 확인 (백업)
                     const loadingSelectors = [
                         '#processMsgLayer',
                         '.pro_loading',
                         '[class*="loading"]',
-                        '[id*="loading"]',
-                        '.loading',
-                        '.spinner',
-                        '.loader'
+                        '[id*="loading"]'
                     ];
                     
                     for (const selector of loadingSelectors) {
                         const element = document.querySelector(selector);
                         if (element && element.offsetParent !== null) {
-                            console.log(`로딩 요소 발견: ${selector}`);
-                            return true;
-                        }
-                    }
-                    
-                    // 로딩 텍스트 확인
-                    const bodyText = document.body.textContent || '';
-                    const loadingTexts = ['처리중입니다', '로딩중', 'Loading', '처리 중입니다', '잠시만 기다려주세요'];
-                    
-                    for (const text of loadingTexts) {
-                        if (bodyText.includes(text)) {
-                            console.log(`로딩 텍스트 발견: "${text}"`);
+                            console.log(`로딩창 감지: ${selector}`);
                             return true;
                         }
                     }
@@ -1227,24 +1235,82 @@ class IROSFindAutomation {
                 });
                 
                 if (hasLoadingElements) {
-                    if (!loadingDetected) {
-                        console.log('🔍 로딩창 감지됨');
-                        loadingDetected = true;
+                    loadingDetected = true;
+                    console.log('🔍 로딩창 감지됨');
+                    break;
+                }
+                
+                await this.waitWithTimeout(1000);
+                waitForLoadingAttempts++;
+            }
+            
+            if (!loadingDetected) {
+                console.log('⚠️ 로딩창이 감지되지 않았습니다. 계속 진행합니다.');
+                return;
+            }
+            
+            // 2단계: 로딩창이 사라질 때까지 대기
+            console.log('⏳ 로딩창이 사라질 때까지 대기 중...');
+            let attempts = 0;
+            const maxAttempts = 30; // 30초 대기
+            let consecutiveNoLoadingCount = 0;
+            const requiredConsecutiveCount = 2; // 2번 연속으로 로딩이 없어야 완료로 간주
+            
+            while (attempts < maxAttempts) {
+                const hasLoadingElements = await page.evaluate(() => {
+                    // 1. "처리 중입니다." 텍스트가 있는 요소 찾기
+                    const processingElements = document.querySelectorAll('*');
+                    for (const element of processingElements) {
+                        if (element.textContent && element.textContent.trim() === '처리 중입니다.') {
+                            // 요소가 화면에 보이는지 확인
+                            if (element.offsetParent !== null) {
+                                console.log('로딩창 감지: "처리 중입니다." 텍스트');
+                                return true;
+                            }
+                        }
                     }
+                    
+                    // 2. 줄무늬 애니메이션이 있는 로딩창 찾기 (CSS 애니메이션 기반)
+                    const animatedElements = document.querySelectorAll('*');
+                    for (const element of animatedElements) {
+                        const style = window.getComputedStyle(element);
+                        if (style.backgroundImage && style.backgroundImage.includes('linear-gradient')) {
+                            // 줄무늬 패턴이 있는 요소 확인
+                            if (element.offsetParent !== null && element.offsetWidth > 100 && element.offsetHeight > 20) {
+                                console.log('로딩창 감지: 줄무늬 애니메이션');
+                                return true;
+                            }
+                        }
+                    }
+                    
+                    // 3. 기존 로딩창 요소들도 확인 (백업)
+                    const loadingSelectors = [
+                        '#processMsgLayer',
+                        '.pro_loading',
+                        '[class*="loading"]',
+                        '[id*="loading"]'
+                    ];
+                    
+                    for (const selector of loadingSelectors) {
+                        const element = document.querySelector(selector);
+                        if (element && element.offsetParent !== null) {
+                            console.log(`로딩창 감지: ${selector}`);
+                            return true;
+                        }
+                    }
+                    
+                    return false;
+                });
+                
+                if (hasLoadingElements) {
                     consecutiveNoLoadingCount = 0;
                     console.log(`⏳ 로딩 중... (${attempts + 1}/${maxAttempts})`);
                 } else {
                     consecutiveNoLoadingCount++;
-                    if (loadingDetected) {
-                        console.log(`✅ 로딩 완료 확인 중... (${consecutiveNoLoadingCount}/${requiredConsecutiveCount})`);
-                    }
+                    console.log(`✅ 로딩 완료 확인 중... (${consecutiveNoLoadingCount}/${requiredConsecutiveCount})`);
                     
                     if (consecutiveNoLoadingCount >= requiredConsecutiveCount) {
-                        if (loadingDetected) {
-                            console.log('✅ 로딩창이 완전히 사라졌습니다.');
-                        } else {
-                            console.log('✅ 로딩창이 감지되지 않았습니다.');
-                        }
+                        console.log('✅ 로딩창이 완전히 사라졌습니다.');
                         break;
                     }
                 }
@@ -1423,28 +1489,28 @@ class IROSFindAutomation {
             // 버튼 클릭 시도
             if (prevButton) {
                 try {
-                    const isVisible = await prevButton.isVisible();
-                    const isEnabled = await prevButton.isEnabled();
-                    console.log(`🔍 이전 페이지 버튼 상태 - 보임: ${isVisible}, 활성화: ${isEnabled}`);
-                    
-                    if (isVisible) {
-                        console.log('🖱️ 이전 페이지 버튼 클릭 실행...');
-                        await prevButton.click();
-                        await this.waitWithTimeout(CONFIG.TIMEOUTS.LOADING);
-                        console.log('✅ 이전 목록 페이지로 돌아갔습니다.');
-                        
-                        // 🔍 디버깅: 이동 후 상태 확인
-                        console.log(`🔍 이동 후 페이지 URL: ${this.page.url()}`);
-                        console.log(`🔍 이동 후 페이지 제목: ${await this.page.title()}`);
-                        
-                        return true;
+            const isVisible = await prevButton.isVisible();
+            const isEnabled = await prevButton.isEnabled();
+            console.log(`🔍 이전 페이지 버튼 상태 - 보임: ${isVisible}, 활성화: ${isEnabled}`);
+            
+            if (isVisible) {
+                console.log('🖱️ 이전 페이지 버튼 클릭 실행...');
+                await prevButton.click();
+                await this.waitWithTimeout(CONFIG.TIMEOUTS.LOADING);
+                console.log('✅ 이전 목록 페이지로 돌아갔습니다.');
+                
+                // 🔍 디버깅: 이동 후 상태 확인
+                console.log(`🔍 이동 후 페이지 URL: ${this.page.url()}`);
+                console.log(`🔍 이동 후 페이지 제목: ${await this.page.title()}`);
+                
+                return true;
                     }
                 } catch (clickError) {
                     console.log('❌ 이전 페이지 버튼 클릭 실패:', clickError.message);
                 }
             }
             
-            console.log('⚠️ 이전 목록 페이지 버튼을 찾을 수 없습니다.');
+                console.log('⚠️ 이전 목록 페이지 버튼을 찾을 수 없습니다.');
             return false;
             
         } catch (error) {
@@ -1521,11 +1587,11 @@ class IROSFindAutomation {
                     }
                 } catch (clickError) {
                     console.log('❌ 1페이지 버튼 클릭 실패:', clickError.message);
+                    }
                 }
-            }
-            
+                
             console.log('⚠️ 1페이지 버튼을 찾을 수 없습니다.');
-            return false;
+                return false;
             
         } catch (error) {
             console.log('❌ 1페이지 이동 실패:', error.message);
@@ -1589,7 +1655,7 @@ class IROSFindAutomation {
                     await this.goToFirstPage();
                 }
                 
-                return true;
+            return true;
             } catch (error) {
                 console.log(`⚠️ 새 탭 처리 중 오류: ${error.message}`);
                 if (!isLastCompany) {
