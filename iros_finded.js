@@ -6,12 +6,12 @@ const readline = require('readline');
 const CONFIG = {
     BATCH_SIZE: 10,
     TIMEOUTS: {
-        DEFAULT: 2000,
-        LOADING: 3000,
-        LONG: 5000,
-        SELECTOR: 10000,
-        LONG_SELECTOR: 15000,
-        VERY_LONG: 30000
+        DEFAULT: 1000,        // 2000 → 1000 (50% 단축)
+        LOADING: 1500,        // 3000 → 1500 (50% 단축)
+        LONG: 3000,           // 5000 → 3000 (40% 단축)
+        SELECTOR: 5000,       // 10000 → 5000 (50% 단축)
+        LONG_SELECTOR: 8000,  // 15000 → 8000 (47% 단축)
+        VERY_LONG: 15000      // 30000 → 15000 (50% 단축)
     },
     SELECTORS: {
         BUTTONS: {
@@ -526,7 +526,22 @@ class IROSFindAutomation {
                         console.log(`📋 행 내용: "${rowText}"`);
                         console.log(`🔍 검색 조건 - 등기상호: "${data.등기상호}", 법인구분: "${data.법인구분 || '없음'}", 관할등기소: "${data.등기소 || '없음'}"`);
                         
-                            // 2. 법인구분이 있으면 확인 (4번째 컬럼, 인덱스 3)
+                            // 2. 관할등기소가 있으면 확인 (5번째 컬럼, 인덱스 4)
+                            if (data.등기소 && data.등기소.trim()) {
+                                const registryOffice = cells.length > 4 ? cells[4].textContent.trim() : '';
+                                console.log(`🔍 관할등기소 확인 중: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
+                                if (!registryOffice.includes(data.등기소)) {
+                                    console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
+                                    console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
+                                    continue; // 다음 행으로
+                                } else {
+                                    console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
+                                }
+                            } else {
+                                console.log(`ℹ️ 관할등기소가 없어서 상호명만으로 검색`);
+                            }
+                        
+                            // 3. 법인구분이 있으면 확인 (4번째 컬럼, 인덱스 3)
                         if (data.법인구분 && data.법인구분.trim()) {
                                 const corporationType = cells.length > 3 ? cells[3].textContent.trim() : '';
                                 console.log(`🔍 법인구분 확인 중: 예상 "${data.법인구분}", 실제 "${corporationType}"`);
@@ -539,21 +554,6 @@ class IROSFindAutomation {
                             }
                         } else {
                             console.log(`ℹ️ 법인구분이 없어서 건너뜀`);
-                        }
-                        
-                            // 3. 관할등기소가 있으면 확인 (5번째 컬럼, 인덱스 4)
-                        if (data.등기소 && data.등기소.trim()) {
-                                const registryOffice = cells.length > 4 ? cells[4].textContent.trim() : '';
-                                console.log(`🔍 관할등기소 확인 중: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
-                                if (!registryOffice.includes(data.등기소)) {
-                                    console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
-                                console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
-                                continue; // 다음 행으로
-                            } else {
-                                console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
-                            }
-                        } else {
-                            console.log(`ℹ️ 관할등기소가 없어서 건너뜀`);
                         }
                         
                             // 4. 모든 조건이 일치하면 체크박스 클릭 (1번째 컬럼, 인덱스 0)
@@ -743,7 +743,22 @@ class IROSFindAutomation {
                         console.log(`📋 행 내용: "${rowText}"`);
                         console.log(`🔍 검색 조건 - 등기상호: "${data.등기상호}", 법인구분: "${data.법인구분 || '없음'}", 관할등기소: "${data.등기소 || '없음'}"`);
                         
-                            // 2. 법인구분이 있으면 확인 (4번째 컬럼, 인덱스 3)
+                            // 2. 관할등기소가 있으면 확인 (5번째 컬럼, 인덱스 4)
+                            if (data.등기소 && data.등기소.trim()) {
+                                const registryOffice = cells.length > 4 ? cells[4].textContent.trim() : '';
+                                console.log(`🔍 관할등기소 확인 중: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
+                                if (!registryOffice.includes(data.등기소)) {
+                                    console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
+                                    console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
+                                    continue; // 다음 행으로
+                                } else {
+                                    console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
+                                }
+                            } else {
+                                console.log(`ℹ️ 관할등기소가 없어서 상호명만으로 검색`);
+                            }
+                        
+                            // 3. 법인구분이 있으면 확인 (4번째 컬럼, 인덱스 3)
                         if (data.법인구분 && data.법인구분.trim()) {
                                 const corporationType = cells.length > 3 ? cells[3].textContent.trim() : '';
                                 console.log(`🔍 법인구분 확인 중: 예상 "${data.법인구분}", 실제 "${corporationType}"`);
@@ -756,21 +771,6 @@ class IROSFindAutomation {
                             }
                         } else {
                             console.log(`ℹ️ 법인구분이 없어서 건너뜀`);
-                        }
-                        
-                            // 3. 관할등기소가 있으면 확인 (5번째 컬럼, 인덱스 4)
-                        if (data.등기소 && data.등기소.trim()) {
-                                const registryOffice = cells.length > 4 ? cells[4].textContent.trim() : '';
-                                console.log(`🔍 관할등기소 확인 중: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
-                                if (!registryOffice.includes(data.등기소)) {
-                                    console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
-                                console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
-                                continue; // 다음 행으로
-                            } else {
-                                console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
-                            }
-                        } else {
-                            console.log(`ℹ️ 관할등기소가 없어서 건너뜀`);
                         }
                         
                             // 4. 모든 조건이 일치하면 체크박스 클릭 (1번째 컬럼, 인덱스 0)
@@ -888,10 +888,8 @@ class IROSFindAutomation {
                         await link.click();
                         console.log('✅ 대체 방법으로 열람/발급 버튼 클릭 완료');
                         
-                        // 🔍 디버깅: 클릭 후 상태 확인
-                        await this.waitWithTimeout(CONFIG.TIMEOUTS.DEFAULT);
-                        console.log(`🔍 클릭 후 현재 페이지 URL: ${this.page.url()}`);
-                        console.log(`🔍 클릭 후 현재 페이지 제목: ${await this.page.title()}`);
+                        // 클릭 후 상태 확인
+                        await this.waitWithTimeout(500);
                         
                         return true;
                     }
@@ -915,10 +913,8 @@ class IROSFindAutomation {
             await viewButton.click();
             console.log('✅ 열람/발급 버튼 클릭 완료');
             
-            // 🔍 디버깅: 클릭 후 상태 확인
-            await this.waitWithTimeout(CONFIG.TIMEOUTS.DEFAULT);
-            console.log(`🔍 클릭 후 현재 페이지 URL: ${this.page.url()}`);
-            console.log(`🔍 클릭 후 현재 페이지 제목: ${await this.page.title()}`);
+            // 클릭 후 상태 확인
+            await this.waitWithTimeout(500);
             
             // 🔍 디버깅: 클릭 후 탭 상태 확인
             const context = this.page.context();
@@ -985,10 +981,8 @@ class IROSFindAutomation {
                         await link.click();
                         console.log('✅ 대체 방법으로 확인 버튼 클릭 완료');
                         
-                        // 🔍 디버깅: 클릭 후 상태 확인
-                        await this.waitWithTimeout(1000);
-                        console.log(`🔍 클릭 후 현재 페이지 URL: ${this.page.url()}`);
-                        console.log(`🔍 클릭 후 현재 페이지 제목: ${await this.page.title()}`);
+                        // 클릭 후 상태 확인
+                        await this.waitWithTimeout(500);
                         
                         return true;
                     }
@@ -1012,10 +1006,8 @@ class IROSFindAutomation {
             await confirmButton.click();
             console.log('✅ 확인 버튼 클릭 완료');
             
-            // 🔍 디버깅: 클릭 후 상태 확인 (더 긴 대기 시간)
-            console.log('⏳ 확인 버튼 클릭 후 3초 대기 중...');
-            await this.waitWithTimeout(3000);
-            console.log(`🔍 클릭 후 현재 페이지 URL: ${this.page.url()}`);
+            // 클릭 후 상태 확인
+            await this.waitWithTimeout(1000);
             console.log(`🔍 클릭 후 현재 페이지 제목: ${await this.page.title()}`);
             
             // 🔍 디버깅: 클릭 후 탭 상태 확인
@@ -1098,7 +1090,8 @@ class IROSFindAutomation {
                 // 새 탭이 이미 열려있는지 확인
                 if (currentPages.length > 1) {
                     newPage = currentPages[currentPages.length - 1];
-                    console.log(`✅ 이미 열려있는 새 탭 발견: ${newPage.url()}`);
+                    console.log(`✅ 새 탭 감지 완료: ${newPage.url()}`);
+                    console.log(`📄 새 탭 제목: ${await newPage.title()}`);
                 } else {
                     console.log('❌ 새 탭이 열리지 않았습니다. 현재 페이지에서 처리합니다.');
                     // 새 탭이 열리지 않았을 때 이전 페이지로 돌아가기
@@ -1107,9 +1100,6 @@ class IROSFindAutomation {
                     return; // 새 탭이 없으면 그냥 종료
                 }
             }
-            console.log(`✅ 새 탭 감지 완료!`);
-            console.log(`📄 새 탭 URL: ${newPage.url()}`);
-            console.log(`📄 새 탭 제목: ${await newPage.title()}`);
             
             // 🔍 디버깅: 새 탭 추가 후 탭 상태 확인
             const updatedPages = context.pages();
@@ -1187,7 +1177,7 @@ class IROSFindAutomation {
             console.log('⏳ 로딩창이 나타날 때까지 대기 중...');
             let loadingDetected = false;
             let waitForLoadingAttempts = 0;
-            const maxWaitForLoadingAttempts = 10; // 10초 동안 로딩창 대기
+            const maxWaitForLoadingAttempts = 5; // 5초 동안 로딩창 대기 (10초 → 5초)
             
             while (!loadingDetected && waitForLoadingAttempts < maxWaitForLoadingAttempts) {
                 const hasLoadingElements = await page.evaluate(() => {
@@ -1198,7 +1188,7 @@ class IROSFindAutomation {
                             // 요소가 화면에 보이는지 확인
                             if (element.offsetParent !== null) {
                                 console.log('로딩창 감지: "처리 중입니다." 텍스트');
-                                return true;
+                        return true;
                             }
                         }
                     }
@@ -1210,7 +1200,7 @@ class IROSFindAutomation {
                         if (style.backgroundImage && style.backgroundImage.includes('linear-gradient')) {
                             if (element.offsetParent !== null && element.offsetWidth > 100 && element.offsetHeight > 20) {
                                 console.log('로딩창 감지: 줄무늬 애니메이션');
-                                return true;
+                        return true;
                             }
                         }
                     }
@@ -1224,11 +1214,11 @@ class IROSFindAutomation {
                     ];
                     
                     for (const selector of loadingSelectors) {
-                        const element = document.querySelector(selector);
-                        if (element && element.offsetParent !== null) {
+                            const element = document.querySelector(selector);
+                            if (element && element.offsetParent !== null) {
                             console.log(`로딩창 감지: ${selector}`);
-                            return true;
-                        }
+                                return true;
+                            }
                     }
                     
                     return false;
@@ -1252,7 +1242,7 @@ class IROSFindAutomation {
             // 2단계: 로딩창이 사라질 때까지 대기
             console.log('⏳ 로딩창이 사라질 때까지 대기 중...');
             let attempts = 0;
-            const maxAttempts = 30; // 30초 대기
+            const maxAttempts = 20; // 20초 대기 (30초 → 20초)
             let consecutiveNoLoadingCount = 0;
             const requiredConsecutiveCount = 2; // 2번 연속으로 로딩이 없어야 완료로 간주
             
@@ -1265,7 +1255,7 @@ class IROSFindAutomation {
                             // 요소가 화면에 보이는지 확인
                             if (element.offsetParent !== null) {
                                 console.log('로딩창 감지: "처리 중입니다." 텍스트');
-                                return true;
+                            return true;
                             }
                         }
                     }
@@ -1344,19 +1334,19 @@ class IROSFindAutomation {
             
             // 페이지가 완전히 로드될 때까지 추가 대기
             await this.page.waitForLoadState('domcontentloaded');
-            await this.waitWithTimeout(5000); // 5초 추가 대기
+            await this.waitWithTimeout(2000); // 5초 → 2초로 단축
             
             // 결제 관련 요소들이 완전히 로드될 때까지 추가 대기
-            console.log('⏳ 결제 화면 완전 로딩 대기 중... (10초)');
-            await this.waitWithTimeout(10000); // 10초 추가 대기
+            console.log('⏳ 결제 화면 완전 로딩 대기 중... (3초)');
+            await this.waitWithTimeout(3000); // 10초 → 3초로 단축
             
             console.log('✅ 결제 화면 로딩 완료 - 다음 법인 처리가 가능합니다.');
             
         } catch (error) {
             console.log('⚠️ 결제대상확인 페이지 대기 중 오류:', error.message);
             // 오류가 발생해도 충분한 시간 대기
-            console.log('⏳ 안전을 위해 추가 대기 중... (15초)');
-            await this.waitWithTimeout(15000);
+            console.log('⏳ 안전을 위해 추가 대기 중... (5초)');
+            await this.waitWithTimeout(5000);
         }
     }
 
@@ -1614,10 +1604,8 @@ class IROSFindAutomation {
             const found = await this.findCompany(companyData);
             if (!found) {
                 console.log(`❌ "${companyData.등기상호}" 법인을 찾을 수 없습니다.`);
-                // 법인을 찾지 못했을 때 이전 페이지로 돌아가서 1페이지로 이동
-                console.log('🔙 법인을 찾지 못해 이전 페이지로 돌아가서 1페이지로 이동합니다...');
-                await this.goToPreviousPage();
-                await this.goToFirstPage();
+                // 이미 1페이지에 있으므로 추가 이동 불필요
+                console.log('🔙 법인을 찾지 못했습니다. 1페이지에 머물러 있습니다.');
                 return false;
             }
             
