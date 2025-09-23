@@ -4,14 +4,17 @@ const readline = require('readline');
 
 // 전역 설정 객체
 const CONFIG = {
-    BATCH_SIZE: 10,
+    BATCH_SIZE: 10,           // 배치 크기 (10개씩 처리)
+    MAX_RETRIES: 3,           // 최대 재시도 횟수
+    RETRY_DELAY: 2000,        // 재시도 간격 (2초)
     TIMEOUTS: {
-        DEFAULT: 1000,        // 2000 → 1000 (50% 단축)
-        LOADING: 1500,        // 3000 → 1500 (50% 단축)
-        LONG: 3000,           // 5000 → 3000 (40% 단축)
-        SELECTOR: 5000,       // 10000 → 5000 (50% 단축)
-        LONG_SELECTOR: 8000,  // 15000 → 8000 (47% 단축)
-        VERY_LONG: 15000      // 30000 → 15000 (50% 단축)
+        DEFAULT: 3000,        // 1초 → 3초 (서버 응답 지연 대응)
+        LOADING: 5000,        // 1.5초 → 5초 (로딩 시간 증가)
+        LONG: 8000,           // 3초 → 8초 (긴 작업 대응)
+        SELECTOR: 10000,      // 5초 → 10초 (요소 찾기 시간 증가)
+        LONG_SELECTOR: 15000, // 8초 → 15초 (복잡한 요소 찾기)
+        VERY_LONG: 30000,     // 15초 → 30초 (매우 긴 작업)
+        PAGE_LOAD: 60000      // 페이지 로딩 타임아웃 (60초)
     },
     SELECTORS: {
         BUTTONS: {
@@ -48,6 +51,10 @@ class IROSFindAutomation {
         this.page = null;
         this.originalPage = null; // 원래 탭 참조 저장
         this.companies = [];
+        this.processedCount = 0;  // 처리된 법인 수
+        this.successCount = 0;    // 성공한 법인 수
+        this.failCount = 0;       // 실패한 법인 수
+        this.currentBatch = 0;    // 현재 배치 번호
     }
 
     // CSV 파일 읽기 및 파싱
@@ -163,7 +170,7 @@ class IROSFindAutomation {
         console.log('🌐 IROS 사이트 접속 중...');
         await this.page.goto('https://www.iros.go.kr/index.jsp', {
             waitUntil: 'domcontentloaded',
-            timeout: 30000
+            timeout: CONFIG.TIMEOUTS.PAGE_LOAD
         });
         
         // 4단계: 페이지 완전 로딩 대기
@@ -533,11 +540,11 @@ class IROSFindAutomation {
                                 if (!registryOffice.includes(data.등기소)) {
                                     console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
                                     console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
-                                    continue; // 다음 행으로
-                                } else {
-                                    console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
-                                }
+                                continue; // 다음 행으로
                             } else {
+                                    console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
+                            }
+                        } else {
                                 console.log(`ℹ️ 관할등기소가 없어서 상호명만으로 검색`);
                             }
                         
@@ -750,11 +757,11 @@ class IROSFindAutomation {
                                 if (!registryOffice.includes(data.등기소)) {
                                     console.log(`⚠️ 관할등기소 불일치: 예상 "${data.등기소}", 실제 "${registryOffice}"`);
                                     console.log(`⚠️ 관할등기소가 일치하지 않아 다음 행으로 넘어갑니다.`);
-                                    continue; // 다음 행으로
-                                } else {
-                                    console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
-                                }
+                                continue; // 다음 행으로
                             } else {
+                                    console.log(`✅ 관할등기소 일치: "${data.등기소}"`);
+                            }
+                        } else {
                                 console.log(`ℹ️ 관할등기소가 없어서 상호명만으로 검색`);
                             }
                         
@@ -1120,14 +1127,28 @@ class IROSFindAutomation {
             
             if (shouldCloseTab) {
                 // 새 탭 닫기
-            console.log('❌ 새 탭 닫기 중...');
-            await newPage.close();
-            console.log('✅ 새 탭 닫기 완료');
-            
+                console.log('❌ 새 탭 닫기 중...');
+                try {
+                    await newPage.close();
+                    console.log('✅ 새 탭 닫기 완료');
+                } catch (closeError) {
+                    console.log('⚠️ 새 탭 닫기 중 오류:', closeError.message);
+                    // 강제로 탭 닫기 시도
+                    try {
+                        await newPage.evaluate(() => window.close());
+                    } catch (forceCloseError) {
+                        console.log('⚠️ 강제 탭 닫기도 실패:', forceCloseError.message);
+                    }
+                }
+                
                 // 원래 탭으로 포커스 이동
-            console.log('🔙 원래 탭으로 포커스 이동 중...');
-            await this.page.bringToFront();
-            console.log('✅ 원래 탭 포커스 완료');
+                console.log('🔙 원래 탭으로 포커스 이동 중...');
+                try {
+                    await this.page.bringToFront();
+                    console.log('✅ 원래 탭 포커스 완료');
+                } catch (focusError) {
+                    console.log('⚠️ 포커스 이동 중 오류:', focusError.message);
+                }
             
             // 이전에 선택했던 체크박스 해제
             console.log('☑️ 이전에 선택했던 체크박스 해제 중...');
@@ -1163,163 +1184,203 @@ class IROSFindAutomation {
 
 
 
-    // 새 탭에서 로딩창이 사라질 때까지 대기
+    // 개선된 로딩창 감지 및 대기 (화면 중앙 오버레이 기반)
     async waitForLoadingToComplete(targetPage = null) {
         const page = targetPage || this.page;
+        
         try {
-            console.log('⏳ 로딩창 감지 중...');
+            console.log('⏳ 로딩창 감지 시작...');
             
-            // 페이지 로딩 완료 대기
+            // 1. 페이지 로딩 완료 대기
             await page.waitForLoadState('domcontentloaded');
             console.log('✅ 페이지 DOM 로딩 완료');
             
-            // 1단계: 로딩창이 나타날 때까지 대기
+            // 2. 로딩창이 나타날 때까지 대기
             console.log('⏳ 로딩창이 나타날 때까지 대기 중...');
-            let loadingDetected = false;
-            let waitForLoadingAttempts = 0;
-            const maxWaitForLoadingAttempts = 5; // 5초 동안 로딩창 대기 (10초 → 5초)
+            let loadingAppeared = false;
+            let attempts = 0;
+            const maxAttempts = 10; // 5초 동안 대기 (500ms * 10)
             
-            while (!loadingDetected && waitForLoadingAttempts < maxWaitForLoadingAttempts) {
-                const hasLoadingElements = await page.evaluate(() => {
-                    // 1. "처리 중입니다." 텍스트가 있는 요소 찾기
-                    const processingElements = document.querySelectorAll('*');
-                    for (const element of processingElements) {
-                        if (element.textContent && element.textContent.trim() === '처리 중입니다.') {
-                            // 요소가 화면에 보이는지 확인
-                            if (element.offsetParent !== null) {
-                                console.log('로딩창 감지: "처리 중입니다." 텍스트');
-                        return true;
+            while (!loadingAppeared && attempts < maxAttempts) {
+                const hasLoading = await page.evaluate(() => {
+                    const checks = [
+                        // 1. 텍스트 기반 감지
+                        () => {
+                            const allElements = document.getElementsByTagName('*');
+                            for (let el of allElements) {
+                                if (el.textContent && el.textContent.trim() === '처리 중입니다.') {
+                                    return el.offsetParent !== null;
+                                }
                             }
-                        }
-                    }
-                    
-                    // 2. 줄무늬 애니메이션이 있는 로딩창 찾기
-                    const animatedElements = document.querySelectorAll('*');
-                    for (const element of animatedElements) {
-                        const style = window.getComputedStyle(element);
-                        if (style.backgroundImage && style.backgroundImage.includes('linear-gradient')) {
-                            if (element.offsetParent !== null && element.offsetWidth > 100 && element.offsetHeight > 20) {
-                                console.log('로딩창 감지: 줄무늬 애니메이션');
-                        return true;
+                            return false;
+                        },
+                        
+                        // 2. 선택자 기반 감지 (크기 조건 추가)
+                        () => {
+                            const selectors = ['#processMsgLayer', '.loading', '[class*="loading"]', '[id*="loading"]'];
+                            return selectors.some(sel => {
+                                const el = document.querySelector(sel);
+                                return el && el.offsetParent !== null && 
+                                       el.offsetWidth > 50 && el.offsetHeight > 30;
+                            });
+                        },
+                        
+                        // 3. 화면 중앙의 오버레이 감지
+                        () => {
+                            const centerX = window.innerWidth / 2;
+                            const centerY = window.innerHeight / 2;
+                            const centerElement = document.elementFromPoint(centerX, centerY);
+                            
+                            if (centerElement) {
+                                const style = window.getComputedStyle(centerElement);
+                                // 반투명 배경이나 높은 z-index를 가진 요소
+                                return (style.backgroundColor.includes('rgba') || 
+                                       parseInt(style.zIndex) > 1000) &&
+                                       centerElement.offsetWidth > window.innerWidth * 0.3;
                             }
+                            return false;
                         }
-                    }
-                    
-                    // 3. 기존 로딩창 요소들도 확인 (백업)
-                    const loadingSelectors = [
-                        '#processMsgLayer',
-                        '.pro_loading',
-                        '[class*="loading"]',
-                        '[id*="loading"]'
                     ];
                     
-                    for (const selector of loadingSelectors) {
-                            const element = document.querySelector(selector);
-                            if (element && element.offsetParent !== null) {
-                            console.log(`로딩창 감지: ${selector}`);
-                                return true;
-                            }
-                    }
-                    
-                    return false;
+                    return checks.some(check => check());
                 });
                 
-                if (hasLoadingElements) {
-                    loadingDetected = true;
+                if (hasLoading) {
+                    loadingAppeared = true;
                     console.log('🔍 로딩창 감지됨');
                     break;
                 }
                 
-                await this.waitWithTimeout(1000);
-                waitForLoadingAttempts++;
-            }
-            
-            if (!loadingDetected) {
-                console.log('⚠️ 로딩창이 감지되지 않았습니다. 계속 진행합니다.');
-                return;
-            }
-            
-            // 2단계: 로딩창이 사라질 때까지 대기
-            console.log('⏳ 로딩창이 사라질 때까지 대기 중...');
-            let attempts = 0;
-            const maxAttempts = 20; // 20초 대기 (30초 → 20초)
-            let consecutiveNoLoadingCount = 0;
-            const requiredConsecutiveCount = 2; // 2번 연속으로 로딩이 없어야 완료로 간주
-            
-            while (attempts < maxAttempts) {
-                const hasLoadingElements = await page.evaluate(() => {
-                    // 1. "처리 중입니다." 텍스트가 있는 요소 찾기
-                    const processingElements = document.querySelectorAll('*');
-                    for (const element of processingElements) {
-                        if (element.textContent && element.textContent.trim() === '처리 중입니다.') {
-                            // 요소가 화면에 보이는지 확인
-                            if (element.offsetParent !== null) {
-                                console.log('로딩창 감지: "처리 중입니다." 텍스트');
-                            return true;
-                            }
-                        }
-                    }
-                    
-                    // 2. 줄무늬 애니메이션이 있는 로딩창 찾기 (CSS 애니메이션 기반)
-                    const animatedElements = document.querySelectorAll('*');
-                    for (const element of animatedElements) {
-                        const style = window.getComputedStyle(element);
-                        if (style.backgroundImage && style.backgroundImage.includes('linear-gradient')) {
-                            // 줄무늬 패턴이 있는 요소 확인
-                            if (element.offsetParent !== null && element.offsetWidth > 100 && element.offsetHeight > 20) {
-                                console.log('로딩창 감지: 줄무늬 애니메이션');
-                                return true;
-                            }
-                        }
-                    }
-                    
-                    // 3. 기존 로딩창 요소들도 확인 (백업)
-                    const loadingSelectors = [
-                        '#processMsgLayer',
-                        '.pro_loading',
-                        '[class*="loading"]',
-                        '[id*="loading"]'
-                    ];
-                    
-                    for (const selector of loadingSelectors) {
-                        const element = document.querySelector(selector);
-                        if (element && element.offsetParent !== null) {
-                            console.log(`로딩창 감지: ${selector}`);
-                            return true;
-                        }
-                    }
-                    
-                    return false;
-                });
-                
-                if (hasLoadingElements) {
-                    consecutiveNoLoadingCount = 0;
-                    console.log(`⏳ 로딩 중... (${attempts + 1}/${maxAttempts})`);
-                } else {
-                    consecutiveNoLoadingCount++;
-                    console.log(`✅ 로딩 완료 확인 중... (${consecutiveNoLoadingCount}/${requiredConsecutiveCount})`);
-                    
-                    if (consecutiveNoLoadingCount >= requiredConsecutiveCount) {
-                        console.log('✅ 로딩창이 완전히 사라졌습니다.');
-                        break;
-                    }
-                }
-                
-                await this.waitWithTimeout(1000);
+                await new Promise(resolve => setTimeout(resolve, 500));
                 attempts++;
             }
             
-            if (attempts >= maxAttempts) {
+            if (!loadingAppeared) {
+                console.log('⚠️ 로딩창이 감지되지 않음. 기본 대기 후 진행');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return;
+            }
+            
+            // 3. 로딩창이 사라질 때까지 대기
+            console.log('⏳ 로딩창이 사라질 때까지 대기 중...');
+            let waitAttempts = 0;
+            const maxWaitAttempts = 60; // 30초 대기 (500ms * 60)
+            let consecutiveNoLoading = 0;
+            
+            while (waitAttempts < maxWaitAttempts) {
+                const loadingStatus = await page.evaluate(() => {
+                    const results = {
+                        textCheck: false,
+                        selectorCheck: false,
+                        centerCheck: false,
+                        details: []
+                    };
+                    
+                    // 1. 텍스트 기반 감지
+                    const allElements = document.getElementsByTagName('*');
+                    for (let el of allElements) {
+                        if (el.textContent && el.textContent.trim() === '처리 중입니다.') {
+                            if (el.offsetParent !== null) {
+                                results.textCheck = true;
+                                results.details.push('텍스트 "처리 중입니다." 감지됨');
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 2. 선택자 기반 감지
+                    const selectors = ['#processMsgLayer', '.loading', '[class*="loading"]', '[id*="loading"]'];
+                    for (const sel of selectors) {
+                        const el = document.querySelector(sel);
+                        if (el && el.offsetParent !== null && 
+                           el.offsetWidth > 50 && el.offsetHeight > 30) {
+                            results.selectorCheck = true;
+                            results.details.push(`선택자 "${sel}" 감지됨 (크기: ${el.offsetWidth}x${el.offsetHeight})`);
+                            break;
+                        }
+                    }
+                    
+                    // 3. 화면 중앙 오버레이 감지
+                    const centerX = window.innerWidth / 2;
+                    const centerY = window.innerHeight / 2;
+                    const centerElement = document.elementFromPoint(centerX, centerY);
+                    
+                    if (centerElement) {
+                        const style = window.getComputedStyle(centerElement);
+                        const hasRgba = style.backgroundColor.includes('rgba');
+                        const hasHighZIndex = parseInt(style.zIndex) > 1000;
+                        const isLargeEnough = centerElement.offsetWidth > window.innerWidth * 0.3;
+                        
+                        if ((hasRgba || hasHighZIndex) && isLargeEnough) {
+                            results.centerCheck = true;
+                            results.details.push(`중앙 오버레이 감지됨 (rgba: ${hasRgba}, z-index: ${style.zIndex}, 크기: ${centerElement.offsetWidth}x${centerElement.offsetHeight})`);
+                        }
+                    }
+                    
+                    // 4. 추가 감지 방법들
+                    // 4-1. 커서 상태 확인
+                    if (document.body.style.cursor === 'wait' || document.body.style.cursor === 'progress') {
+                        results.details.push('커서가 wait/progress 상태');
+                    }
+                    
+                    // 4-2. 페이지 로딩 상태 확인
+                    if (document.readyState !== 'complete') {
+                        results.details.push(`문서 상태: ${document.readyState}`);
+                    }
+                    
+                    // 4-3. 모든 모달/팝업 요소 확인
+                    const allModals = document.querySelectorAll('[class*="modal"], [class*="popup"], [class*="overlay"], [style*="position: fixed"], [style*="position: absolute"]');
+                    for (const modal of allModals) {
+                        if (modal.offsetParent !== null) {
+                            const rect = modal.getBoundingClientRect();
+                            if (rect.width > 200 && rect.height > 100) {
+                                results.details.push(`큰 모달/팝업 감지됨 (${modal.className || modal.id || 'unknown'}, 크기: ${rect.width}x${rect.height})`);
+                            }
+                        }
+                    }
+                    
+                    results.isLoading = results.textCheck || results.selectorCheck || results.centerCheck;
+                    return results;
+                });
+                
+                if (!loadingStatus.isLoading) {
+                    consecutiveNoLoading++;
+                    console.log(`✅ 로딩 완료 확인 중... (${consecutiveNoLoading}/3)`);
+                    if (consecutiveNoLoading >= 3) {
+                        console.log('✅ 로딩창이 완전히 사라졌습니다.');
+                        break;
+                    }
+                } else {
+                    consecutiveNoLoading = 0;
+                    console.log(`⏳ 로딩 중... (${waitAttempts + 1}/${maxWaitAttempts})`);
+                    console.log(`🔍 감지된 로딩 요소: ${loadingStatus.details.join(', ')}`);
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                waitAttempts++;
+            }
+            
+            if (waitAttempts >= maxWaitAttempts) {
                 console.log('⚠️ 로딩창 감지 타임아웃 (30초) - 계속 진행합니다.');
+                
+                // 타임아웃 시 현재 페이지 상태 디버깅
+                const debugInfo = await page.evaluate(() => ({
+                    url: window.location.href,
+                    title: document.title,
+                    readyState: document.readyState,
+                    bodyText: document.body.textContent.substring(0, 200),
+                    visibleElements: Array.from(document.querySelectorAll('*')).filter(el => el.offsetParent !== null).length
+                }));
+                console.log('🔍 타임아웃 시 페이지 상태:', debugInfo);
             }
             
             // 안전 대기
-            await this.waitWithTimeout(2000);
+            await new Promise(resolve => setTimeout(resolve, 1000));
             console.log('✅ 로딩 완료');
             
         } catch (error) {
             console.log('⚠️ 로딩창 감지 중 오류:', error.message);
-            await this.waitWithTimeout(3000);
+            await new Promise(resolve => setTimeout(resolve, 3000));
         }
     }
 
@@ -1660,36 +1721,66 @@ class IROSFindAutomation {
         }
     }
 
-    // 여러 법인 처리
+    // 여러 법인 처리 (배치 처리 방식)
     async processMultipleCompanies(companies) {
-        console.log(`\n📋 총 ${companies.length}개 법인을 처리합니다.`);
+        console.log(`\n📋 총 ${companies.length}개 법인을 ${CONFIG.BATCH_SIZE}개씩 배치로 처리합니다.`);
         
-        let successCount = 0;
-        let failCount = 0;
+        // 배치로 나누기
+        const batches = [];
+        for (let i = 0; i < companies.length; i += CONFIG.BATCH_SIZE) {
+            batches.push(companies.slice(i, i + CONFIG.BATCH_SIZE));
+        }
         
-        for (let i = 0; i < companies.length; i++) {
-            const company = companies[i];
-            const isLastCompany = (i === companies.length - 1);
-            console.log(`\n📊 진행률: ${i + 1}/${companies.length}`);
+        console.log(`📦 총 ${batches.length}개 배치로 나누어 처리합니다.`);
+        
+        let totalSuccessCount = 0;
+        let totalFailCount = 0;
+        
+        // 각 배치 처리
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+            const batch = batches[batchIndex];
+            const batchNumber = batchIndex + 1;
             
-            const success = await this.processCompany(company, isLastCompany);
-            if (success) {
-                successCount++;
-            } else {
-                failCount++;
-            }
-            
-            // 다음 법인 처리 전 잠시 대기
-            if (i < companies.length - 1) {
-                await this.waitWithTimeout(CONFIG.TIMEOUTS.DEFAULT);
+            try {
+                console.log(`\n🚀 배치 ${batchNumber}/${batches.length} 시작`);
+                
+                // 배치 처리
+                const result = await this.processBatch(batch, batchNumber);
+                totalSuccessCount += result.success;
+                totalFailCount += result.fail;
+                
+                // 마지막 배치가 아니면 메모리 정리 및 잠시 대기
+                if (batchIndex < batches.length - 1) {
+                    console.log(`\n⏳ 다음 배치 처리 전 정리 중...`);
+                    await this.cleanupMemory();
+                    await this.waitWithTimeout(5000); // 5초 대기
+                    
+                    // 페이지 상태 복구
+                    await this.recoverPageState();
+                }
+                
+            } catch (error) {
+                console.log(`❌ 배치 ${batchNumber} 처리 중 오류: ${error.message}`);
+                totalFailCount += batch.length; // 배치 전체를 실패로 처리
+                
+                // 오류 발생 시에도 다음 배치로 계속 진행
+                if (batchIndex < batches.length - 1) {
+                    console.log(`🔄 다음 배치로 계속 진행합니다...`);
+                    await this.cleanupMemory();
+                    await this.waitWithTimeout(5000);
+                    await this.recoverPageState();
+                }
             }
         }
         
-        console.log(`\n📊 처리 결과:`);
-        console.log(`✅ 성공: ${successCount}개`);
-        console.log(`❌ 실패: ${failCount}개`);
+        console.log(`\n🎉 모든 배치 처리 완료!`);
+        console.log(`📊 최종 결과:`);
+        console.log(`   총 처리: ${companies.length}개`);
+        console.log(`   성공: ${totalSuccessCount}개`);
+        console.log(`   실패: ${totalFailCount}개`);
+        console.log(`   성공률: ${((totalSuccessCount / companies.length) * 100).toFixed(1)}%`);
         
-        return { successCount, failCount };
+        return { successCount: totalSuccessCount, failCount: totalFailCount };
     }
 
     // CSV 파일에서 자동화 실행
@@ -1721,13 +1812,15 @@ class IROSFindAutomation {
             // 여러 법인 처리
             const result = await this.processMultipleCompanies(this.companies);
             
-            // 모든 처리 완료 후 사용자에게 완료 알림
-            console.log('\n🎉 모든 법인 처리 완료!');
-            console.log('💡 브라우저를 닫으면 프로그램이 자동으로 종료됩니다.');
-            console.log('💡 또는 터미널에서 Enter를 눌러 프로그램을 종료할 수 있습니다.');
+            // 모든 처리 완료 후 결제 대기
+            console.log('\n🎉 모든 법인 검색 완료!');
+            console.log('💳 이제 결제를 진행해주세요.');
             
-            // 사용자가 수동으로 종료할 때까지 대기 (브라우저 닫기로도 종료 가능)
-            await this.askQuestion('모든 작업이 완료되었습니다. Enter를 눌러 프로그램을 종료하거나 브라우저를 닫으세요...');
+            // 결제 완료 대기
+            await this.askQuestion('결제를 완료하셨나요? (완료하셨으면 Enter를 눌러주세요)');
+            
+            // 결제 후 열람/발급 자동화 실행
+            await this.processPaymentAndDownload();
             
             return true;
             
@@ -1761,11 +1854,14 @@ class IROSFindAutomation {
             const success = await this.processCompany(this.companies[0]);
             
             if (success) {
-                console.log('\n🎉 법인 처리 완료!');
-                console.log('💡 브라우저를 닫으면 프로그램이 자동으로 종료됩니다.');
-                console.log('💡 또는 터미널에서 Enter를 눌러 프로그램을 종료할 수 있습니다.');
+                console.log('\n🎉 법인 검색 완료!');
+                console.log('💳 이제 결제를 진행해주세요.');
                 
-                await this.askQuestion('작업이 완료되었습니다. Enter를 눌러 프로그램을 종료하거나 브라우저를 닫으세요...');
+                // 결제 완료 대기
+                await this.askQuestion('결제를 완료하셨나요? (완료하셨으면 Enter를 눌러주세요)');
+                
+                // 결제 후 열람/발급 자동화 실행
+                await this.processPaymentAndDownload();
             } else {
                 console.log('\n❌ 법인 처리 실패');
             }
@@ -1791,6 +1887,253 @@ class IROSFindAutomation {
                 resolve();
             });
         });
+    }
+
+    // 결제 완료 후 열람/발급 자동화
+    async processPaymentAndDownload() {
+        try {
+            console.log('\n💳 결제 완료 후 열람/발급 자동화를 시작합니다...');
+            
+            // 1. 결제 완료 확인 대기
+            console.log('⏳ 결제 완료를 기다리는 중...');
+            await this.waitForPaymentCompletion();
+            
+            // 2. 모든 등기에 대해 순차적으로 열람/발급 처리
+            await this.processAllRegistrations();
+            
+            console.log('\n🎉 모든 등기 열람/발급 처리가 완료되었습니다!');
+            
+        } catch (error) {
+            console.log('❌ 결제 후 처리 중 오류:', error.message);
+        }
+    }
+
+    // 결제 완료 대기
+    async waitForPaymentCompletion() {
+        try {
+            // 결제 완료 화면이 나타날 때까지 대기
+            await this.page.waitForSelector('h3[id*="wq_uuid"]', { 
+                timeout: 60000,
+                state: 'visible'
+            });
+            
+            // 결제 완료 메시지 확인
+            const paymentCompleteText = await this.page.textContent('h3[id*="wq_uuid"]');
+            if (paymentCompleteText && paymentCompleteText.includes('신청결과')) {
+                console.log('✅ 결제 완료 화면을 확인했습니다.');
+                await this.waitWithTimeout(2000);
+            }
+            
+        } catch (error) {
+            console.log('⚠️ 결제 완료 화면을 찾을 수 없습니다. 계속 진행합니다.');
+        }
+    }
+
+    // 모든 등기에 대해 순차적으로 처리
+    async processAllRegistrations() {
+        try {
+            let registrationIndex = 0;
+            let hasMoreRegistrations = true;
+            
+            while (hasMoreRegistrations) {
+                console.log(`\n📋 등기 ${registrationIndex + 1} 처리 중...`);
+                
+                // 열람 버튼 찾기 및 클릭
+                const viewButton = await this.findAndClickViewButton(registrationIndex);
+                
+                if (viewButton) {
+                    // 열람 창에서 저장 및 처리
+                    await this.handleViewWindow();
+                    registrationIndex++;
+                } else {
+                    console.log('📋 더 이상 처리할 등기가 없습니다.');
+                    hasMoreRegistrations = false;
+                }
+                
+                // 다음 등기 처리 전 잠시 대기
+                if (hasMoreRegistrations) {
+                    await this.waitWithTimeout(1000);
+                }
+            }
+            
+        } catch (error) {
+            console.log('❌ 등기 처리 중 오류:', error.message);
+        }
+    }
+
+    // 열람 버튼 찾기 및 클릭
+    async findAndClickViewButton(index) {
+        try {
+            // 열람/발급 버튼 찾기 (XPath 사용)
+            const viewButtonXPath = `//button[@title="열람/발급" and contains(text(), "열람")]`;
+            
+            // 모든 열람 버튼 찾기
+            const viewButtons = await this.page.locator('xpath=' + viewButtonXPath).all();
+            
+            if (viewButtons && viewButtons.length > index) {
+                console.log(`🔍 열람 버튼 ${index + 1} 클릭 중...`);
+                await viewButtons[index].click();
+                await this.waitWithTimeout(2000);
+                
+                // 확인 대화상자 처리 (실제 테스트에서 확인됨)
+                await this.handleConfirmationDialog();
+                
+                return true;
+            } else {
+                console.log(`❌ 열람 버튼 ${index + 1}을 찾을 수 없습니다.`);
+                return false;
+            }
+            
+        } catch (error) {
+            console.log('❌ 열람 버튼 클릭 중 오류:', error.message);
+            return false;
+        }
+    }
+
+    // 확인 대화상자 처리
+    async handleConfirmationDialog() {
+        try {
+            // 확인 대화상자가 나타나는지 확인 (실제 테스트에서 확인됨)
+            const confirmDialog = await this.page.waitForSelector('button:has-text("확인")', { 
+                timeout: 5000,
+                state: 'visible'
+            }).catch(() => null);
+            
+            if (confirmDialog) {
+                console.log('⚠️ 확인 대화상자가 나타났습니다. "확인" 버튼을 클릭합니다.');
+                await confirmDialog.click();
+                console.log('✅ 확인 대화상자 처리 완료');
+                await this.waitWithTimeout(2000); // 처리 완료 대기
+            }
+            
+        } catch (error) {
+            // 확인 대화상자가 없어도 정상적인 경우이므로 오류 로그만 출력
+            console.log('ℹ️ 확인 대화상자가 없습니다. 계속 진행합니다.');
+        }
+    }
+
+    // 열람 창 처리
+    async handleViewWindow() {
+        try {
+            console.log('📄 열람 창에서 처리 중...');
+            
+            // 열람 창이 완전히 로드될 때까지 대기 (실제 테스트에서 확인됨)
+            await this.waitForViewWindowToLoad();
+            
+            // 저장 버튼 클릭
+            await this.clickDownloadButton();
+            
+            // change.py 실행
+            await this.runChangePy();
+            
+            // 열람 창 닫기
+            await this.closeViewWindow();
+            
+        } catch (error) {
+            console.log('❌ 열람 창 처리 중 오류:', error.message);
+        }
+    }
+
+    // 열람 창 로딩 대기
+    async waitForViewWindowToLoad() {
+        try {
+            console.log('⏳ 열람 창 로딩 대기 중...');
+            
+            // "처리 중입니다" 로딩 화면이 사라지고 열람 창이 나타날 때까지 대기
+            await this.page.waitForSelector('button:has-text("저장")', { 
+                timeout: 30000,
+                state: 'visible'
+            });
+            
+            console.log('✅ 열람 창 로딩 완료');
+            await this.waitWithTimeout(2000); // 추가 안정화 대기
+            
+        } catch (error) {
+            console.log('⚠️ 열람 창 로딩 대기 중 오류:', error.message);
+            // 로딩 실패해도 계속 진행
+        }
+    }
+
+    // 저장 버튼 클릭
+    async clickDownloadButton() {
+        try {
+            console.log('💾 저장 버튼 클릭 중...');
+            
+            // 저장 버튼 찾기 및 클릭 (실제 테스트에서 확인된 셀렉터)
+            const downloadButton = await this.page.waitForSelector(
+                'button:has-text("저장")', 
+                { timeout: 10000 }
+            );
+            
+            if (downloadButton) {
+                await downloadButton.click();
+                console.log('✅ 저장 버튼 클릭 완료');
+                await this.waitWithTimeout(3000); // 다운로드 완료 대기
+            }
+            
+        } catch (error) {
+            console.log('❌ 저장 버튼 클릭 중 오류:', error.message);
+        }
+    }
+
+    // change.py 실행
+    async runChangePy() {
+        try {
+            console.log('🐍 change.py 실행 중...');
+            
+            const { spawn } = require('child_process');
+            const path = require('path');
+            
+            // change.py 파일 경로 (현재 디렉토리의 상위 디렉토리/tts_stt/change.py)
+            const changePyPath = path.join(__dirname, '..', 'tts_stt', 'change.py');
+            
+            return new Promise((resolve, reject) => {
+                const pythonProcess = spawn('python', [changePyPath], {
+                    stdio: 'inherit',
+                    shell: true
+                });
+                
+                pythonProcess.on('close', (code) => {
+                    if (code === 0) {
+                        console.log('✅ change.py 실행 완료');
+                        resolve();
+                    } else {
+                        console.log(`❌ change.py 실행 실패 (코드: ${code})`);
+                        reject(new Error(`change.py 실행 실패: ${code}`));
+                    }
+                });
+                
+                pythonProcess.on('error', (error) => {
+                    console.log('❌ change.py 실행 중 오류:', error.message);
+                    reject(error);
+                });
+            });
+            
+        } catch (error) {
+            console.log('❌ change.py 실행 중 오류:', error.message);
+        }
+    }
+
+    // 열람 창 닫기
+    async closeViewWindow() {
+        try {
+            console.log('❌ 열람 창 닫기 중...');
+            
+            // 창닫기 버튼 찾기 및 클릭 (실제 테스트에서 확인된 셀렉터)
+            const closeButton = await this.page.waitForSelector(
+                'a:has-text("창닫기")', 
+                { timeout: 5000 }
+            );
+            
+            if (closeButton) {
+                await closeButton.click();
+                console.log('✅ 열람 창 닫기 완료');
+                await this.waitWithTimeout(1000);
+            }
+            
+        } catch (error) {
+            console.log('❌ 열람 창 닫기 중 오류:', error.message);
+        }
     }
 
     // 웹페이지 완전 로딩 확인
@@ -1853,11 +2196,165 @@ class IROSFindAutomation {
         await this.page.waitForTimeout(timeout);
     }
 
+    // 재시도 로직이 포함된 안전한 실행 함수
+    async executeWithRetry(operation, operationName, maxRetries = CONFIG.MAX_RETRIES) {
+        let lastError = null;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`🔄 ${operationName} 시도 ${attempt}/${maxRetries}`);
+                const result = await operation();
+                if (attempt > 1) {
+                    console.log(`✅ ${operationName} 성공 (${attempt}번째 시도)`);
+                }
+                return result;
+            } catch (error) {
+                lastError = error;
+                console.log(`❌ ${operationName} 실패 (${attempt}/${maxRetries}): ${error.message}`);
+                
+                if (attempt < maxRetries) {
+                    console.log(`⏳ ${CONFIG.RETRY_DELAY/1000}초 후 재시도...`);
+                    await this.waitWithTimeout(CONFIG.RETRY_DELAY);
+                    
+                    // 재시도 전에 페이지 상태 확인 및 복구
+                    await this.recoverPageState();
+                }
+            }
+        }
+        
+        throw new Error(`${operationName} 최대 재시도 횟수 초과: ${lastError.message}`);
+    }
+
+    // 페이지 상태 복구 함수
+    async recoverPageState() {
+        try {
+            console.log('🔧 페이지 상태 복구 중...');
+            
+            // 현재 URL 확인
+            const currentUrl = this.page.url();
+            console.log(`📍 현재 URL: ${currentUrl}`);
+            
+            // 관심등기 관리 페이지가 아니면 다시 이동
+            if (!currentUrl.includes('interest') && !currentUrl.includes('관심등기')) {
+                console.log('🔄 관심등기 관리 페이지로 재이동...');
+                await this.navigateToInterestRegistry();
+            }
+            
+            // 팝업 제거
+            await this.removePopupsAfterLogin();
+            
+            console.log('✅ 페이지 상태 복구 완료');
+        } catch (error) {
+            console.log('⚠️ 페이지 상태 복구 중 오류:', error.message);
+        }
+    }
+
+    // 메모리 정리 함수
+    async cleanupMemory() {
+        try {
+            console.log('🧹 메모리 정리 중...');
+            
+            // 모든 탭 닫기 (원래 탭 제외)
+            const pages = this.context.pages();
+            for (let i = 1; i < pages.length; i++) {
+                try {
+                    await pages[i].close();
+                } catch (error) {
+                    console.log(`⚠️ 탭 ${i} 닫기 실패: ${error.message}`);
+                }
+            }
+            
+            // 가비지 컬렉션 강제 실행 (Node.js에서 사용 가능한 경우)
+            if (global.gc) {
+                global.gc();
+                console.log('🗑️ 가비지 컬렉션 실행');
+            }
+            
+            // 잠시 대기
+            await this.waitWithTimeout(1000);
+            
+            console.log('✅ 메모리 정리 완료');
+        } catch (error) {
+            console.log('⚠️ 메모리 정리 중 오류:', error.message);
+        }
+    }
+
+    // 배치 처리 함수
+    async processBatch(batch, batchNumber) {
+        console.log(`\n📦 배치 ${batchNumber} 처리 시작 (${batch.length}개 법인)`);
+        this.currentBatch = batchNumber;
+        
+        let batchSuccessCount = 0;
+        let batchFailCount = 0;
+        
+        for (let i = 0; i < batch.length; i++) {
+            const company = batch[i];
+            const isLastInBatch = (i === batch.length - 1);
+            const globalIndex = (batchNumber - 1) * CONFIG.BATCH_SIZE + i + 1;
+            
+            console.log(`\n📊 전체 진행률: ${globalIndex}/${this.companies.length} (배치 ${batchNumber}/${Math.ceil(this.companies.length / CONFIG.BATCH_SIZE)})`);
+            console.log(`🏢 처리 중: ${company.등기상호}`);
+            
+            try {
+                const success = await this.executeWithRetry(
+                    () => this.processCompany(company, isLastInBatch),
+                    `${company.등기상호} 처리`
+                );
+                
+                if (success) {
+                    batchSuccessCount++;
+                    this.successCount++;
+                    console.log(`✅ ${company.등기상호} 처리 완료`);
+                } else {
+                    batchFailCount++;
+                    this.failCount++;
+                    console.log(`❌ ${company.등기상호} 처리 실패`);
+                }
+                
+                this.processedCount++;
+                
+                // 다음 법인 처리 전 잠시 대기
+                if (i < batch.length - 1) {
+                    await this.waitWithTimeout(CONFIG.TIMEOUTS.DEFAULT);
+                }
+                
+            } catch (error) {
+                batchFailCount++;
+                this.failCount++;
+                this.processedCount++;
+                console.log(`❌ ${company.등기상호} 처리 중 예외 발생: ${error.message}`);
+                
+                // 오류 발생 시에도 다음 법인으로 계속 진행
+                continue;
+            }
+        }
+        
+        console.log(`\n📊 배치 ${batchNumber} 완료: 성공 ${batchSuccessCount}개, 실패 ${batchFailCount}개`);
+        return { success: batchSuccessCount, fail: batchFailCount };
+    }
 
     async cleanup() {
-        if (this.browser) {
-            await this.browser.close();
-            console.log('🧹 브라우저 정리 완료');
+        try {
+            console.log('🧹 전체 정리 시작...');
+            
+            // 메모리 정리
+            await this.cleanupMemory();
+            
+            // 브라우저 종료
+            if (this.browser) {
+                await this.browser.close();
+                console.log('🧹 브라우저 정리 완료');
+            }
+            
+            // 최종 통계 출력
+            console.log(`\n📊 전체 처리 결과:`);
+            console.log(`   총 처리: ${this.processedCount}개`);
+            console.log(`   성공: ${this.successCount}개`);
+            console.log(`   실패: ${this.failCount}개`);
+            console.log(`   성공률: ${this.processedCount > 0 ? ((this.successCount / this.processedCount) * 100).toFixed(1) : 0}%`);
+            
+        } catch (error) {
+            console.log('⚠️ 정리 중 오류:', error.message);
         }
     }
 }
@@ -1877,6 +2374,14 @@ async function main() {
             console.log('📁 find_data.csv 파일이 없습니다. 사용자 입력을 받습니다.');
             await automation.automateFromUserInput();
         }
+        
+        // 모든 처리가 완료되면 브라우저 유지
+        console.log('\n🎉 모든 작업이 완료되었습니다!');
+        console.log('💡 브라우저를 닫으면 프로그램이 자동으로 종료됩니다.');
+        await automation.askQuestion('Enter를 눌러 프로그램을 종료하거나 브라우저를 닫으세요...');
+        
+        // 정상 종료 시에도 cleanup 호출
+        await automation.cleanup();
         
     } catch (error) {
         console.log('❌ 프로그램 실행 중 오류:', error.message);
