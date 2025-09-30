@@ -1,6 +1,7 @@
 const { chromium } = require('playwright');
 const readline = require('readline');
 const fs = require('fs');
+const path = require('path');
 
 // 설정 객체 - 하드코딩된 값들을 중앙 관리
 const CONFIG = {
@@ -87,6 +88,15 @@ class IROSAutomation {
     async start() {
         console.log('🚀 IROS 법인등기 자동화 시작...');
         
+        // 다운로드 경로를 .playwright-mcp 폴더로 설정
+        const downloadPath = path.join(__dirname, '.playwright-mcp');
+        
+        // .playwright-mcp 폴더가 없으면 생성
+        if (!fs.existsSync(downloadPath)) {
+            fs.mkdirSync(downloadPath, { recursive: true });
+            console.log(`📁 .playwright-mcp 폴더 생성: ${downloadPath}`);
+        }
+        
         // 1단계: 브라우저 실행 (완전 최대화)
         this.browser = await chromium.launch({ 
             headless: false,
@@ -98,16 +108,29 @@ class IROSAutomation {
                 '--disable-blink-features=AutomationControlled',
                 '--disable-web-security',
                 '--disable-infobars',
-                '--window-size=1920,1080'
+                '--window-size=1920,1080',
+                `--download-directory=${downloadPath}` // 다운로드 경로 설정
             ]
         });
         
-        this.page = await this.browser.newPage();
+        this.context = await this.browser.newContext({
+            acceptDownloads: true // 다운로드 허용
+        });
         
-        // 브라우저 종료 감지 이벤트 리스너 추가
+        this.page = await this.context.newPage();
+        
+        // 브라우저 종료 감지 이벤트 리스너 추가 (중복 제거)
         this.browser.on('disconnected', () => {
             console.log('\n🔴 브라우저가 닫혔습니다. 프로그램을 종료합니다...');
             process.exit(0);
+        });
+        
+        // 다운로드 이벤트 리스너 추가
+        this.page.on('download', async (download) => {
+            const fileName = download.suggestedFilename();
+            const downloadPath = path.join(__dirname, '.playwright-mcp', fileName);
+            await download.saveAs(downloadPath);
+            console.log(`📥 파일 다운로드 완료: ${fileName}`);
         });
         
         // 2단계: 뷰포트를 화면 크기에 맞게 설정
@@ -127,7 +150,7 @@ class IROSAutomation {
         console.log('🌐 IROS 사이트 접속 중...');
         await this.page.goto('https://www.iros.go.kr/index.jsp', {
             waitUntil: 'domcontentloaded',
-            timeout: 30000
+            timeout: 50000
         });
         
         // 4단계: 페이지 완전 로딩 대기
@@ -661,8 +684,8 @@ class IROSAutomation {
             await this.page.click('#mf_wfm_potal_main_wfm_content_btn_next');
             console.log('✅ 1단계 성공: 정확한 ID로 클릭 완료');
             await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(2000);
-            console.log('✅ 페이지 로딩 완료');
+                await this.page.waitForTimeout(2000);
+                console.log('✅ 페이지 로딩 완료');
             return true; // 성공
         } catch (e) {
             console.log('⚠️ 1단계 실패:', e.message);
@@ -680,8 +703,8 @@ class IROSAutomation {
                 await this.page.click('link:has-text("다음")');
                 console.log('✅ 2단계 성공: 텍스트 기반으로 클릭 완료');
                 await this.page.waitForLoadState('networkidle');
-                await this.page.waitForTimeout(2000);
-                console.log('✅ 페이지 로딩 완료');
+                    await this.page.waitForTimeout(2000);
+                    console.log('✅ 페이지 로딩 완료');
                 return true; // 성공
             } catch (e2) {
                 console.log('⚠️ 2단계 실패:', e2.message);
@@ -1490,63 +1513,48 @@ class IROSAutomation {
         
         console.log('\n🎯 자동화 완료!');
         
-        // 모든 처리가 완료되면 사용자에게 결제 진행 여부 확인
-        console.log('\n🎉 모든 작업이 완료되었습니다!');
-        console.log('💳 결제를 진행하셨습니까? (y/n): ');
+        // 모든 처리가 완료되면 사용자에게 PDF 다운로드 여부 확인
+        console.log('\n🎉 모든 등기 신청이 완료되었습니다!');
+        console.log('📄 신청결과확인 화면에서 등기들을 다운로드 하시겠습니까? (y/n): ');
         
-        // 사용자 입력 받기
-        const readline = require('readline');
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
-        
+        // 기존 readline 인터페이스 사용 (중복 생성 방지)
         return new Promise((resolve, reject) => {
-            rl.question('', async (answer) => {
-                rl.close();
-                
-                if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes' || answer === '그렇다') {
-                    console.log('🚀 test_pay.js를 실행합니다...');
+            // 입력 대기 시간을 조금 주어 버퍼 정리
+            setTimeout(() => {
+                this.rl.question('', async (answer) => {
+                    // 입력값 디버깅 로그
+                    console.log(`🔍 입력된 값: "${answer}" (길이: ${answer.length})`);
                     
-                    // test_pay.js 실행
-                    const { spawn } = require('child_process');
-                    const path = require('path');
+                    // 입력값 정리 및 검증 강화
+                    const trimmedAnswer = answer.trim().toLowerCase();
+                    console.log(`🔍 정리된 값: "${trimmedAnswer}"`);
                     
-                    const testPayPath = path.join(__dirname, 'test_pay.js');
-                    console.log(`📁 test_pay.js 실행: ${testPayPath}`);
+                    // 다양한 입력 형태 지원
+                    const isYes = trimmedAnswer === 'y' || 
+                                 trimmedAnswer === 'yes' || 
+                                 trimmedAnswer === '그렇다' || 
+                                 trimmedAnswer === 'ㅇ' ||
+                                 trimmedAnswer === '예' ||
+                                 trimmedAnswer === '1';
                     
-                    const testPayProcess = spawn('node', [testPayPath], {
-                        stdio: 'inherit',
-                        shell: true,
-                        env: {
-                            ...process.env,
-                            USE_EXTERNAL_BROWSER: 'true'  // 외부 브라우저 사용 플래그
-                        }
-                    });
+                    if (isYes) {
+                    console.log('🚀 PDF 다운로드를 시작합니다...');
                     
-                    testPayProcess.on('close', async (code) => {
-                        if (code === 0) {
-                            console.log('✅ test_pay.js 실행 완료');
-                        } else {
-                            console.log(`❌ test_pay.js 실행 실패 (코드: ${code})`);
-                        }
-                        
-                        // test_pay.js 실행 후 cleanup 호출
-                        await this.cleanup();
-                        resolve();
-                    });
+                    try {
+                        // 통합된 PDF 다운로드 기능 실행
+                        await this.processPaymentAndDownload();
+                        console.log('✅ PDF 다운로드 완료');
+                    } catch (error) {
+                        console.log('❌ PDF 다운로드 중 오류:', error.message);
+                    }
                     
-                    testPayProcess.on('error', async (error) => {
-                        console.log('❌ test_pay.js 실행 중 오류:', error.message);
-                        await this.cleanup();
-                        reject(error);
-                    });
+                    resolve();
                 } else {
-                    console.log('💡 결제를 진행하지 않으셨습니다. 프로그램을 종료합니다.');
-                    await this.cleanup();
+                    console.log('💡 PDF 다운로드를 진행하지 않으셨습니다. 프로그램을 종료합니다.');
                     resolve();
                 }
             });
+            }, 100); // 100ms 대기로 입력 버퍼 정리
         });
     }
 
@@ -1575,12 +1583,733 @@ class IROSAutomation {
         return companies;
     }
 
+    // ===== test_pay.js 기능 통합 =====
+    
+    // 결제 완료 후 열람/발급 자동화 (메인 함수)
+    async processPaymentAndDownload() {
+        try {
+            console.log('\n💳 결제 완료 후 열람/발급 자동화를 시작합니다...');
+            
+            // 1. 결제 완료 확인 대기
+            console.log('⏳ 결제 완료를 기다리는 중...');
+            await this.waitForPaymentCompletion();
+            
+            // 2. 모든 등기에 대해 순차적으로 열람/발급 처리
+            await this.processAllRegistrations();
+            
+            console.log('\n🎉 모든 등기 열람/발급 처리가 완료되었습니다!');
+            
+        } catch (error) {
+            console.log('❌ 결제 후 처리 중 오류:', error.message);
+        }
+    }
+
+
+    // 홈페이지로 이동하여 팝업 제거
+    async goToHomePageAndRemovePopups() {
+        try {
+            console.log('🏠 홈페이지로 이동 중...');
+            await this.page.goto('https://www.iros.go.kr/');
+            await this.page.waitForLoadState('networkidle');
+            await this.page.waitForTimeout(2000);
+            
+            // 팝업 제거 시도
+            try {
+                await this.page.click('button:has-text("닫기")', { timeout: 3000 });
+                console.log('✅ 팝업 제거 완료');
+            } catch (e) {
+                console.log('ℹ️ 제거할 팝업이 없습니다.');
+            }
+            
+        } catch (error) {
+            console.log('❌ 홈페이지 이동 중 오류:', error.message);
+        }
+    }
+
+    // 열람·발급 메뉴로 이동 (법인 신청결과 화면)
+    async navigateToViewIssueMenu() {
+        try {
+            // 홈페이지로 이동
+            console.log('🏠 홈페이지로 이동합니다...');
+            await this.navigateToHome();
+            
+            // 1단계: 첫 번째 열람·발급 메뉴 클릭 (상단 메뉴바의 메인 메뉴)
+            console.log('🔍 1단계: 첫 번째 열람·발급 메뉴 클릭 중...');
+            
+            const clickResult1 = await this.page.evaluate(() => {
+                const targetElement = document.querySelector('#mf_wfm_potal_main_wf_header_wq_uuid_503');
+                if (targetElement) {
+                    targetElement.click();
+                    return '열람·발급 메뉴 클릭 성공';
+                } else {
+                    return '열람·발급 메뉴를 찾을 수 없음';
+                }
+            });
+            
+            console.log(`📋 JavaScript 클릭 결과: ${clickResult1}`);
+            await this.page.waitForTimeout(2000);
+            console.log('✅ 1단계 완료: 첫 번째 열람·발급 메뉴 클릭 완료');
+            
+            // 2단계: 법인 섹션의 "신청결과 확인 (미열람·미발급/재열람 등)" 링크 클릭
+            console.log('🔍 2단계: 법인 섹션의 신청결과 확인 링크 클릭 중...');
+            
+            try {
+                const clickResult = await this.page.evaluate(() => {
+                    // 방법 1: 정확한 ID로 법인 섹션의 신청결과 확인 메뉴 클릭
+                    const targetElement = document.querySelector('#mf_wfm_potal_main_wf_header_gen_depth1_0_gen_depth2_1_gen_depth3_6_btn_top_menu3b');
+                    if (targetElement) {
+                        targetElement.click();
+                        return '법인 신청결과 확인 메뉴 클릭 성공 (ID 방식)';
+                    }
+                    
+                    // 방법 2: 법인 섹션 내의 신청결과 확인 링크를 찾아서 클릭
+                    const allLinks = document.querySelectorAll('a');
+                    for (let link of allLinks) {
+                        const text = link.textContent;
+                        if (text && text.includes('신청결과 확인') && text.includes('미열람')) {
+                            // 부모 요소들을 확인하여 법인 섹션인지 판단
+                            let currentElement = link.parentElement;
+                            let isCorporateSection = false;
+                            
+                            while (currentElement && currentElement !== document.body) {
+                                const parentText = currentElement.textContent || '';
+                                if (parentText.includes('법인') && !parentText.includes('부동산')) {
+                                    isCorporateSection = true;
+                                    break;
+                                }
+                                currentElement = currentElement.parentElement;
+                            }
+                            
+                            if (isCorporateSection) {
+                                link.click();
+                                return '법인 섹션 신청결과 확인 메뉴 클릭 성공 (텍스트 검색)';
+                            }
+                        }
+                    }
+                    
+                    return '법인 신청결과 확인 메뉴를 찾을 수 없음';
+                });
+                
+                console.log(`📋 JavaScript 클릭 결과: ${clickResult}`);
+                
+            } catch (error) {
+                console.log('⚠️ JavaScript 클릭 실패, 대체 방법 시도...');
+                
+                // 법인 섹션의 신청결과 확인 링크를 정확히 찾기
+                const allResultLinks = await this.page.$$('a:has-text("신청결과 확인")');
+                console.log(`📋 찾은 신청결과 확인 링크 개수: ${allResultLinks.length}`);
+                
+                let clicked = false;
+                for (let i = 0; i < allResultLinks.length; i++) {
+                    const link = allResultLinks[i];
+                    const text = await link.textContent();
+                    console.log(`🔍 링크 ${i + 1} 텍스트: "${text}"`);
+                    
+                    // 정확한 링크인지 확인 (미열람 포함)
+                    if (text.includes('신청결과 확인') && text.includes('미열람')) {
+                        // 부동산 섹션이 아닌 법인 섹션의 링크인지 확인
+                        const parentText = await link.evaluate(el => {
+                            const parent = el.closest('li');
+                            return parent ? parent.textContent : '';
+                        });
+                        
+                        if (parentText.includes('법인') && !parentText.includes('부동산')) {
+                            await link.click();
+                            await this.waitWithTimeout(3000);
+                            console.log(`✅ 법인 섹션의 신청결과 확인 링크 클릭 완료: "${text}"`);
+                            clicked = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!clicked) {
+                    console.log('⚠️ 법인 섹션의 신청결과 확인 링크를 찾지 못했습니다. 직접 URL로 이동합니다.');
+                    await this.page.goto('https://www.iros.go.kr/biz/Pc20VipRgsCtrl/callRgsList.do');
+                    await this.waitWithTimeout(3000);
+                    console.log('✅ 직접 URL로 이동 완료');
+                }
+            }
+            
+            // 페이지 로딩 완료 대기
+            await this.page.waitForLoadState('networkidle');
+            await this.page.waitForTimeout(2000);
+            
+            // 페이지 이동 확인
+            const currentUrl = await this.page.url();
+            console.log(`📊 현재 URL: ${currentUrl}`);
+            
+            if (currentUrl.includes('callRgsList.do')) {
+                console.log('✅ 신청결과 확인 페이지 도달 확인됨');
+            } else {
+                console.log('⚠️ 페이지 이동 확인 필요');
+            }
+            
+            console.log('🎉 모든 네비게이션 단계 완료: 법인 등기사항증명서 열람·발급 신청결과 페이지 도달');
+            
+        } catch (error) {
+            console.log('❌ 열람·발급 메뉴 이동 중 오류:', error.message);
+            throw error;
+        }
+    }
+
+    // 결제 완료 대기
+    async waitForPaymentCompletion() {
+        try {
+            // 결제 완료 화면이 나타날 때까지 대기
+            await this.page.waitForSelector('h3[id*="wq_uuid"]', { 
+                timeout: 60000,
+                state: 'visible'
+            });
+            
+            // 결제 완료 메시지 확인
+            const paymentCompleteText = await this.page.textContent('h3[id*="wq_uuid"]');
+            if (paymentCompleteText && paymentCompleteText.includes('신청결과')) {
+                console.log('✅ 결제 완료 화면을 확인했습니다.');
+                await this.page.waitForTimeout(2000);
+            }
+            
+        } catch (error) {
+            console.log('⚠️ 결제 완료 화면을 찾을 수 없습니다. 계속 진행합니다.');
+        }
+    }
+
+    // 모든 등기 처리
+    // 모든 등기에 대해 순차적으로 처리 (페이지네이션 포함) - test_pay.js 방식
+    async processAllRegistrations() {
+        try {
+            let currentPage = 1;
+            let hasMorePages = true;
+            
+            while (hasMorePages) {
+                console.log(`\n📄 페이지 ${currentPage} 처리 중...`);
+                
+                // 현재 페이지의 모든 등기 처리
+                const hasMoreOnCurrentPage = await this.processCurrentPage();
+                
+                if (hasMoreOnCurrentPage) {
+                    // 다음 페이지로 이동 시도
+                    try {
+                        await this.goToNextPageInResults();
+                        currentPage++;
+                        await this.page.waitForTimeout(2000);
+                    } catch (e) {
+                        console.log('✅ 더 이상 페이지가 없습니다.');
+                        hasMorePages = false;
+                    }
+                } else {
+                    hasMorePages = false;
+                }
+            }
+            
+            console.log('✅ 모든 등기 처리 완료');
+            
+        } catch (error) {
+            console.log('❌ 등기 처리 중 오류:', error.message);
+        }
+    }
+
+    // 현재 페이지의 모든 등기 처리 - test_pay.js 방식
+    async processCurrentPage() {
+        try {
+            let registrationIndex = 0;
+            let hasMoreRegistrations = true;
+            
+            while (hasMoreRegistrations) {
+                console.log(`\n🔍 등기 ${registrationIndex + 1} 처리 중...`);
+                
+                try {
+                // 열람 버튼 찾기 및 클릭
+                    const viewButtonClicked = await this.findAndClickViewButton(registrationIndex);
+                
+                    if (viewButtonClicked) {
+                        // 열람 창 처리
+                    await this.handleViewWindow();
+                    
+                        // 다음 등기로 이동
+                        registrationIndex++;
+                    await this.page.waitForTimeout(1000);
+                } else {
+                        console.log('❌ 열람 버튼을 찾을 수 없습니다. 현재 페이지 처리 완료');
+                        hasMoreRegistrations = false;
+                    }
+                    
+                } catch (error) {
+                    console.log('❌ 등기 처리 중 오류:', error.message);
+                    hasMoreRegistrations = false;
+                }
+            }
+            
+            return registrationIndex > 0; // 처리된 등기가 있으면 true
+            
+        } catch (error) {
+            console.log('❌ 현재 페이지 처리 중 오류:', error.message);
+            return false;
+        }
+    }
+
+    // 다음 페이지로 이동 (결과 목록에서)
+    async goToNextPageInResults() {
+        try {
+            console.log('🔄 다음 페이지로 이동 시도 중...');
+            
+            // 다음 페이지 버튼 찾기 및 클릭
+            const nextButton = await this.page.locator('a:has-text("다음")').first();
+            if (await nextButton.isVisible()) {
+                await nextButton.click();
+                await this.page.waitForLoadState('networkidle');
+                console.log('✅ 다음 페이지로 이동 완료');
+                    return true;
+                } else {
+                throw new Error('다음 페이지 버튼을 찾을 수 없음');
+            }
+            
+        } catch (error) {
+            console.log('❌ 다음 페이지 이동 실패:', error.message);
+            throw error;
+        }
+    }
+
+    // 열람 버튼 찾기 및 클릭 (test_pay.js 방식 적용)
+    async findAndClickViewButton(index) {
+        try {
+            console.log(`🔍 열람 버튼 ${index + 1} 찾는 중...`);
+            
+            // test_pay.js에서 검증된 간단하고 효과적인 방법 사용
+            const viewButtons = await this.page.locator('button:has-text("열람")').all();
+            console.log(`📋 찾은 열람 버튼 개수: ${viewButtons.length}`);
+            
+            if (viewButtons && viewButtons.length > 0) {
+                // test_pay.js 방식: 항상 첫 번째 열람 버튼 클릭 (DOM 변경으로 인한 인덱스 문제 해결)
+                console.log(`🔍 첫 번째 열람 버튼 클릭 중... (등기 ${index + 1} 처리)`);
+                await viewButtons[0].click();
+                await this.page.waitForTimeout(2000);
+                
+                // 확인 대화상자 처리
+                await this.handleConfirmationDialog();
+                
+                return true;
+            } else {
+                console.log(`❌ 열람 버튼을 찾을 수 없습니다. (총 ${viewButtons.length}개 발견)`);
+                
+                // 🔍 디버깅: 페이지의 모든 버튼 정보 출력 (실패 시에만)
+                const allButtons = await this.page.evaluate(() => {
+                    const buttons = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a'));
+                    return buttons.map((btn, i) => ({
+                        index: i,
+                        tagName: btn.tagName,
+                        text: btn.textContent?.trim() || btn.value?.trim() || '',
+                        title: btn.title || '',
+                        visible: btn.offsetParent !== null
+                    })).filter(btn => btn.visible);
+                });
+                
+                console.log(`📋 페이지에서 찾은 모든 버튼들 (${allButtons.length}개):`);
+                allButtons.forEach(btn => {
+                    if (btn.text.includes('열람') || btn.text.includes('발급') || btn.title.includes('열람') || btn.title.includes('발급')) {
+                        console.log(`  🎯 [${btn.index}] ${btn.tagName}: "${btn.text}" (title: "${btn.title}")`);
+                    }
+                });
+                
+                return false;
+            }
+            
+        } catch (error) {
+            console.log('❌ 열람 버튼 클릭 중 오류:', error.message);
+            return false;
+        }
+    }
+
+    // 확인 대화상자 처리 (test_pay.js 방식)
+    async handleConfirmationDialog() {
+        try {
+            console.log('🔍 확인 대화상자 찾는 중...');
+            
+            // 여러 가지 방법으로 확인 버튼 찾기 시도
+            let confirmButton = null;
+            
+            // 방법 1: 정확한 팝업 창 내부의 확인 버튼 찾기
+            try {
+                confirmButton = await this.page.waitForSelector('div[id*="message_popup"][id*="wframe_grp_type2"] a[id*="btn_confirm2"]', { 
+                    timeout: 3000,
+                    state: 'visible'
+                });
+                console.log('✅ 팝업 창 type2 그룹의 확인 버튼 찾음');
+            } catch (error) {
+                console.log('⚠️ 팝업 창 type2 그룹의 확인 버튼 찾을 수 없음');
+            }
+            
+            // 방법 2: link:has-text("확인")
+            if (!confirmButton) {
+                try {
+                    confirmButton = await this.page.waitForSelector('link:has-text("확인")', { 
+                        timeout: 3000,
+                        state: 'visible'
+                    });
+                    console.log('✅ link:has-text("확인") 선택자로 확인 버튼 찾음');
+                } catch (error) {
+                    console.log('⚠️ link:has-text("확인") 선택자로 찾을 수 없음');
+                }
+            }
+            
+            // 방법 3: button:has-text("확인")
+            if (!confirmButton) {
+                try {
+                    confirmButton = await this.page.waitForSelector('button:has-text("확인")', { 
+                        timeout: 3000,
+                        state: 'visible'
+                    });
+                    console.log('✅ button:has-text("확인") 선택자로 확인 버튼 찾음');
+                } catch (error) {
+                    console.log('⚠️ button:has-text("확인") 선택자로 찾을 수 없음');
+                }
+            }
+            
+            if (confirmButton) {
+                console.log('⚠️ 확인 대화상자가 나타났습니다. "확인" 버튼을 클릭합니다.');
+                
+                // 여러 가지 클릭 방법 시도
+                let clickSuccess = false;
+                
+                // 방법 1: 일반 클릭
+                try {
+                    await confirmButton.click();
+                    console.log('✅ 일반 클릭 성공');
+                    clickSuccess = true;
+                } catch (error) {
+                    console.log('⚠️ 일반 클릭 실패:', error.message);
+                }
+                
+                // 방법 2: force 옵션으로 클릭
+                if (!clickSuccess) {
+                    try {
+                        await confirmButton.click({ force: true });
+                        console.log('✅ force 클릭 성공');
+                        clickSuccess = true;
+                    } catch (error) {
+                        console.log('⚠️ force 클릭 실패:', error.message);
+                    }
+                }
+                
+                if (clickSuccess) {
+                    console.log('✅ 확인 대화상자 처리 완료');
+                    await this.page.waitForTimeout(2000);
+                } else {
+                    console.log('❌ 모든 클릭 방법이 실패했습니다.');
+                }
+            } else {
+                console.log('ℹ️ 확인 대화상자가 없습니다. 계속 진행합니다.');
+            }
+            
+        } catch (error) {
+            console.log('❌ 확인 대화상자 처리 중 오류:', error.message);
+            return false;
+        }
+    }
+
+    // 열람 창 처리
+    async handleViewWindow() {
+        try {
+            // 열람 창이 완전히 로드될 때까지 대기
+            await this.waitForViewWindowToLoad();
+            
+            // 저장 버튼 클릭
+            await this.clickDownloadButton();
+            
+            // change.py 실행 (실패해도 계속 진행)
+            try {
+                await this.runChangePy();
+            } catch (error) {
+                console.log('⚠️ change.py 실행 실패했지만 계속 진행합니다:', error.message);
+            }
+            
+            // 열람 창 닫기 (반드시 실행)
+            console.log('🔚 열람 창을 닫습니다...');
+            await this.closeViewWindow();
+            
+        } catch (error) {
+            console.log('❌ 열람 창 처리 중 오류:', error.message);
+            // 오류가 발생해도 닫기 버튼은 시도
+            try {
+                console.log('🔚 오류 발생했지만 열람 창을 닫으려고 시도합니다...');
+                await this.closeViewWindow();
+            } catch (closeError) {
+                console.log('❌ 닫기 버튼 클릭도 실패:', closeError.message);
+            }
+        }
+    }
+
+    // 열람 창 로딩 대기
+    async waitForViewWindowToLoad() {
+        try {
+            console.log('⏳ 열람 창 로딩 대기 중...');
+            
+            // "처리 중입니다" 로딩 화면이 사라지고 열람 창이 나타날 때까지 대기
+            // h3 태그의 "법인 등기사항증명서 열람·발급 신청결과" 제목이 나타날 때까지 대기
+            await this.page.waitForSelector('h3.w2textbox.df-tit:has-text("법인 등기사항증명서 열람·발급 신청결과")', { 
+                timeout: 30000,
+                state: 'visible'
+            });
+            
+            console.log('✅ 열람 창 로딩 완료 - 신청결과 페이지 확인됨');
+            await this.page.waitForTimeout(2000); // 추가 안정화 대기
+            
+        } catch (error) {
+            console.log('⚠️ 열람 창 로딩 대기 중 오류:', error.message);
+            // 로딩 실패해도 계속 진행
+        }
+    }
+
+    // 저장 버튼 클릭 (개선된 방식)
+    async clickDownloadButton() {
+        try {
+            console.log('💾 모달 창의 저장 버튼 클릭 중...');
+            
+            // 1단계: 모달 창 완전 로딩 대기
+            await this.page.waitForLoadState('networkidle', { timeout: 15000 });
+            await this.page.waitForTimeout(3000); // 모달 창 안정화 대기
+            
+            // 2단계: 저장 버튼 찾기 (다중 방법 시도)
+            let downloadButton = null;
+            
+            // 방법 1: input[type="button"][value="저장"] 찾기
+            try {
+                downloadButton = await this.page.waitForSelector('input[type="button"][value="저장"]', { 
+                    timeout: 8000,
+                    state: 'visible'
+                });
+                console.log('✅ 방법 1 성공: input[type="button"][value="저장"]로 찾음');
+            } catch (e1) {
+                console.log('⚠️ 방법 1 실패:', e1.message);
+                
+                // 방법 2: button 태그로 찾기
+                try {
+                    downloadButton = await this.page.waitForSelector('button:has-text("저장")', { 
+                        timeout: 8000,
+                        state: 'visible'
+                    });
+                    console.log('✅ 방법 2 성공: button:has-text("저장")로 찾음');
+                } catch (e2) {
+                    console.log('⚠️ 방법 2 실패:', e2.message);
+                    
+                    // 방법 3: input 태그로 찾기
+                    try {
+                        downloadButton = await this.page.waitForSelector('input[value="저장"]', { 
+                            timeout: 8000,
+                            state: 'visible'
+                        });
+                        console.log('✅ 방법 3 성공: input[value="저장"]로 찾음');
+                    } catch (e3) {
+                        console.log('⚠️ 방법 3 실패:', e3.message);
+                        
+                        // 방법 4: JavaScript로 직접 찾기
+                        const buttonInfo = await this.page.evaluate(() => {
+                            // 저장 버튼 관련 요소들 찾기
+                            const selectors = [
+                'input[type="button"][value="저장"]', 
+                                'input[value="저장"]',
+                                'button:contains("저장")',
+                                'input[type="submit"][value="저장"]',
+                                'button[type="submit"]:contains("저장")'
+                            ];
+                            
+                            for (let selector of selectors) {
+                                try {
+                                    const element = document.querySelector(selector);
+                                    if (element && element.offsetParent !== null) {
+                                        return {
+                                            found: true,
+                                            selector: selector,
+                                            tagName: element.tagName,
+                                            value: element.value || element.textContent,
+                                            visible: element.offsetParent !== null
+                                        };
+                    }
+                } catch (e) {
+                                    continue;
+                                }
+                            }
+                            return { found: false };
+                        });
+                        
+                        if (buttonInfo.found) {
+                            console.log('✅ 방법 4 성공: JavaScript로 저장 버튼 찾음');
+                            console.log(`   - 선택자: ${buttonInfo.selector}`);
+                            console.log(`   - 태그: ${buttonInfo.tagName}`);
+                            console.log(`   - 값: ${buttonInfo.value}`);
+                            
+                            // JavaScript로 직접 클릭 시도
+                            const clickResult = await this.page.evaluate(() => {
+                                const selectors = [
+                                    'input[type="button"][value="저장"]', 
+                                    'input[value="저장"]',
+                                    'button:contains("저장")',
+                                    'input[type="submit"][value="저장"]',
+                                    'button[type="submit"]:contains("저장")'
+                                ];
+                                
+                                for (let selector of selectors) {
+                                    try {
+                                        const element = document.querySelector(selector);
+                                        if (element && element.offsetParent !== null) {
+                                            element.click();
+                                            return true;
+                                        }
+                                    } catch (e) {
+                                        continue;
+                                    }
+                                }
+            return false;
+                            });
+                            
+                            if (clickResult) {
+                                downloadButton = true; // 클릭 성공 표시
+                            } else {
+                                console.log('❌ 방법 4 실패: JavaScript로도 저장 버튼을 찾을 수 없음');
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 3단계: 클릭 실행
+            if (downloadButton) {
+                let clickSuccess = false;
+                
+                if (downloadButton !== true) { // JavaScript 클릭이 아닌 경우
+                    try {
+                        await downloadButton.click({ timeout: 15000 });
+                        clickSuccess = true;
+                        console.log('✅ 저장 버튼 클릭 성공');
+                    } catch (clickError) {
+                        console.log('❌ 저장 버튼 클릭 실패:', clickError.message);
+                        clickSuccess = false;
+                    }
+                } else {
+                    // JavaScript 클릭은 이미 성공했다고 가정
+                    clickSuccess = true;
+                    console.log('✅ JavaScript로 저장 버튼 클릭 성공');
+                }
+                
+                // 4단계: 클릭 성공 시에만 다운로드 대기 및 메시지 출력
+                if (clickSuccess) {
+                    console.log('✅ 모달 창의 저장 버튼 클릭 완료');
+                    await this.page.waitForTimeout(5000); // 다운로드 완료 대기
+                    console.log('📥 PDF 다운로드가 시작되었습니다...');
+                } else {
+                    console.log('❌ 저장 버튼 클릭이 실패했습니다. 다운로드를 진행할 수 없습니다.');
+                }
+                
+            } else {
+                console.log('❌ 저장 버튼을 찾을 수 없습니다.');
+                
+                // 🔍 디버깅: 페이지의 모든 버튼 정보 출력
+                const allButtons = await this.page.evaluate(() => {
+                    const buttons = document.querySelectorAll('button, input[type="button"], input[type="submit"]');
+                    return Array.from(buttons).map(btn => ({
+                        tagName: btn.tagName,
+                        type: btn.type,
+                        value: btn.value,
+                        textContent: btn.textContent?.trim(),
+                        visible: btn.offsetParent !== null,
+                        id: btn.id,
+                        className: btn.className
+                    }));
+                });
+                
+                console.log('🔍 페이지의 모든 버튼 정보:');
+                allButtons.forEach((btn, index) => {
+                    console.log(`  ${index + 1}. ${btn.tagName}[type="${btn.type}"] - value:"${btn.value}" text:"${btn.textContent}" visible:${btn.visible}`);
+                });
+            }
+            
+        } catch (error) {
+            console.log('❌ 저장 버튼 클릭 중 오류:', error.message);
+        }
+    }
+
+    // change.py 실행
+    async runChangePy() {
+        try {
+            console.log('🐍 change.py 실행 중...');
+            
+            const { spawn } = require('child_process');
+            const changePyPath = path.join(__dirname, 'change.py');
+
+            return new Promise((resolve, reject) => {
+                const pythonProcess = spawn('python', [changePyPath], {
+                    stdio: ['pipe', 'inherit', 'inherit'],
+                    cwd: __dirname,
+                    shell: false
+                });
+
+                // 자동으로 "1" 입력
+                pythonProcess.stdin.write('1\n');
+                pythonProcess.stdin.end();
+
+                pythonProcess.on('close', (code) => {
+                    if (code === 0) {
+                        console.log('✅ change.py 실행 완료');
+                        resolve();
+                    } else {
+                        console.log(`❌ change.py 실행 실패 (코드: ${code})`);
+                        reject(new Error(`change.py 실행 실패: ${code}`));
+                    }
+                });
+
+                pythonProcess.on('error', (error) => {
+                    console.log('❌ change.py 실행 중 오류:', error.message);
+                    reject(error);
+                });
+            });
+
+        } catch (error) {
+            console.log('❌ change.py 실행 중 오류:', error.message);
+        }
+    }
+
+    // 열람 창 닫기
+    async closeViewWindow() {
+        try {
+            console.log('❌ 모달 창 닫기 중...');
+            
+            // 모달 창의 닫기 버튼 찾기 및 클릭
+            const closeButton = await this.page.waitForSelector(
+                'input[type="button"][value="닫기"]', 
+                { timeout: 5000 }
+            );
+            
+            if (closeButton) {
+                await closeButton.click();
+                console.log('✅ 모달 창 닫기 완료');
+                await this.page.waitForTimeout(1000);
+            }
+                
+        } catch (error) {
+            console.log('❌ 모달 창 닫기 중 오류:', error.message);
+        }
+    }
+
     async cleanup() {
+        try {
+            console.log('🧹 리소스 정리 중...');
+            
+        if (this.context) {
+            await this.context.close();
+                console.log('✅ 브라우저 컨텍스트 정리 완료');
+        }
         if (this.browser) {
             await this.browser.close();
+                console.log('✅ 브라우저 정리 완료');
         }
         if (this.rl) {
             this.rl.close();
+                console.log('✅ readline 인터페이스 정리 완료');
+            }
+            
+            console.log('✅ 모든 리소스 정리 완료');
+        } catch (error) {
+            console.log('⚠️ 리소스 정리 중 오류:', error.message);
         }
     }
 }
