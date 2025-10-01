@@ -1895,9 +1895,9 @@ class IROSFindAutomation {
             if (proceedToResults.toLowerCase() === '완료' || 
                 proceedToResults.toLowerCase() === 'y' || 
                 proceedToResults.toLowerCase() === 'yes') {
-                // 현재 화면이 신청결과 확인 화면인지 확인 (URL 기반)
-                const resultUrl = this.page.url();
-                if (resultUrl.includes('callRgsList.do')) {
+                // 현재 화면이 신청결과 확인 화면인지 확인 (페이지 내용)
+                const isOnResultPage = await this.isOnApplicationResultPage();
+                if (isOnResultPage) {
                     console.log('✅ 이미 신청결과확인 화면에 있습니다. 바로 열람/발급 처리를 시작합니다...');
                     // 바로 열람/발급 처리 시작
                     await this.processAllRegistrations();
@@ -1923,12 +1923,82 @@ class IROSFindAutomation {
     }
 
 
+    // 신청결과 화면 도달 확인 헬퍼 함수 (페이지 내용 다중 확인)
+    async isOnApplicationResultPage() {
+        try {
+            let confirmationCount = 0;
+            
+            // 1. h3 태그에 "신청결과" 텍스트 확인 (주요 확인)
+            try {
+                await this.page.waitForSelector('h3[id*="wq_uuid"]', { 
+                    timeout: 10000, 
+                    state: 'visible' 
+                });
+                
+                const pageTitle = await this.page.textContent('h3[id*="wq_uuid"]');
+                if (pageTitle && pageTitle.includes('신청결과')) {
+                    console.log(`✅ 1단계 확인 성공: h3 제목에 "신청결과" 포함 (${pageTitle})`);
+                    confirmationCount++;
+                } else {
+                    console.log(`⚠️ 1단계 확인 실패: h3 제목 확인 안됨 (${pageTitle})`);
+                }
+            } catch (h3Error) {
+                console.log('⚠️ 1단계 확인 실패: h3 태그 찾을 수 없음');
+            }
+            
+            // 2. "열람" 버튼 존재 확인 (신청결과 페이지에만 있음)
+            try {
+                const viewButtonCount = await this.page.locator('button:has-text("열람")').count();
+                if (viewButtonCount > 0) {
+                    console.log(`✅ 2단계 확인 성공: 열람 버튼 발견 (${viewButtonCount}개)`);
+                    confirmationCount++;
+                } else {
+                    console.log('⚠️ 2단계 확인 실패: 열람 버튼 없음');
+                }
+            } catch (viewError) {
+                console.log('⚠️ 2단계 확인 실패: 열람 버튼 검색 오류');
+            }
+            
+            // 3. "재열람" 또는 관련 텍스트 확인 (추가 확인)
+            try {
+                const reViewText = await this.page.locator('text=재열람').count();
+                const resultText = await this.page.locator('text=신청결과').count();
+                
+                if (reViewText > 0 || resultText > 0) {
+                    console.log(`✅ 3단계 확인 성공: 관련 텍스트 발견 (재열람: ${reViewText}, 신청결과: ${resultText})`);
+                    confirmationCount++;
+                } else {
+                    console.log('⚠️ 3단계 확인 실패: 관련 텍스트 없음');
+                }
+            } catch (textError) {
+                console.log('⚠️ 3단계 확인 실패: 텍스트 검색 오류');
+            }
+            
+            // 최종 판정: 2개 이상 확인되면 신청결과 페이지로 판단
+            console.log(`📊 신청결과 페이지 확인: ${confirmationCount}/3 항목 일치`);
+            
+            if (confirmationCount >= 2) {
+                console.log('✅ 신청결과 확인 페이지 도달 확인됨 (다중 확인 통과)');
+                return true;
+            } else if (confirmationCount === 1) {
+                console.log('⚠️ 신청결과 페이지 가능성 있음 (1개 항목만 일치)');
+                return true; // 1개라도 확인되면 true 반환 (보수적 접근)
+            } else {
+                console.log('❌ 신청결과 페이지가 아님 (확인 항목 없음)');
+                return false;
+            }
+        } catch (error) {
+            console.log('❌ 신청결과 페이지 확인 중 오류:', error.message);
+            return false;
+        }
+    }
+
     // 열람·발급 메뉴로 이동 (법인 신청결과 화면)
     async navigateToViewIssueMenu() {
         try {
-            // 먼저 현재 화면이 신청결과 화면인지 확인 (URL 기반)
-            const initialUrl = this.page.url();
-            if (initialUrl.includes('callRgsList.do')) {
+            // 먼저 현재 화면이 신청결과 화면인지 확인 (페이지 내용)
+            const isAlreadyOnResultPage = await this.isOnApplicationResultPage();
+            if (isAlreadyOnResultPage) {
                 console.log('✅ 이미 신청결과확인 화면에 있습니다. 바로 진행합니다.');
                 return true;
             }
@@ -1944,32 +2014,50 @@ class IROSFindAutomation {
             await this.waitWithTimeout(2000);
             
             // 1단계: 첫 번째 열람·발급 메뉴 클릭 (상단 메뉴바의 메인 메뉴)
-            console.log('🔍 1단계: 첫 번째 열람·발급 메뉴 클릭 중...');
+            console.log('🔍 1단계: 상위 열람·발급 메뉴 클릭 중...');
             
             const clickResult1 = await this.page.evaluate(() => {
                 const targetElement = document.querySelector('#mf_wfm_potal_main_wf_header_wq_uuid_503');
                 if (targetElement) {
                     targetElement.click();
-                    return '열람·발급 메뉴 클릭 성공';
+                    return true;
                 } else {
-                    return '열람·발급 메뉴를 찾을 수 없음';
+                    return false;
                 }
             });
             
-            console.log(`📋 JavaScript 클릭 결과: ${clickResult1}`);
-            await this.waitWithTimeout(2000);
-            console.log('✅ 1단계 완료: 첫 번째 열람·발급 메뉴 클릭 완료');
+            // ⭐ 1단계 실패 시 직접 URL로 이동
+            if (!clickResult1) {
+                console.log('❌ 1단계 실패: 상위 메뉴를 찾을 수 없음. 직접 URL로 이동합니다.');
+                await this.page.goto('https://www.iros.go.kr/biz/Pc20VipRgsCtrl/callRgsList.do', {
+                    waitUntil: 'networkidle',
+                    timeout: 30000
+                });
+                await this.waitWithTimeout(2000);
+                
+                // 헬퍼 함수로 확인
+                const isOnResultPage = await this.isOnApplicationResultPage();
+                if (isOnResultPage) {
+                    console.log('✅ 직접 URL 이동으로 신청결과 화면 도달 성공');
+                    return true;
+                } else {
+                    console.log('❌ 직접 URL 이동 실패');
+                    return false;
+                }
+            }
+            
+            console.log('✅ 1단계 성공: 상위 메뉴 클릭 완료');
+            await this.waitWithTimeout(1000);
             
             // 2단계: 법인 섹션의 "신청결과 확인 (미열람·미발급/재열람 등)" 링크 클릭
-            console.log('🔍 2단계: 법인 섹션의 신청결과 확인 링크 클릭 중...');
+            console.log('🔍 2단계: 법인 신청결과 확인 링크 클릭 중...');
             
-            try {
-                const clickResult = await this.page.evaluate(() => {
+            const clickResult2 = await this.page.evaluate(() => {
                     // 방법 1: 정확한 ID로 법인 섹션의 신청결과 확인 메뉴 클릭
                     const targetElement = document.querySelector('#mf_wfm_potal_main_wf_header_gen_depth1_0_gen_depth2_1_gen_depth3_6_btn_top_menu3b');
                     if (targetElement) {
                         targetElement.click();
-                        return '법인 신청결과 확인 메뉴 클릭 성공 (ID 방식)';
+                    return true;
                     }
                     
                     // 방법 2: 법인 섹션 내의 신청결과 확인 링크를 찾아서 클릭
@@ -1992,115 +2080,109 @@ class IROSFindAutomation {
                             
                             if (isCorporateSection) {
                                 link.click();
-                                return '법인 섹션 신청결과 확인 메뉴 클릭 성공 (텍스트 검색)';
-                            }
-                        }
-                    }
-                    
-                    return '법인 신청결과 확인 메뉴를 찾을 수 없음';
-                });
-                
-                console.log(`📋 JavaScript 클릭 결과: ${clickResult}`);
-                await this.waitWithTimeout(3000);
-                
-            } catch (error) {
-                console.log('⚠️ JavaScript 클릭 실패, 대체 방법 시도...');
-                
-                // 법인 섹션의 신청결과 확인 링크를 정확히 찾기
-                const allResultLinks = await this.page.$$('a:has-text("신청결과 확인")');
-                console.log(`📋 찾은 신청결과 확인 링크 개수: ${allResultLinks.length}`);
-                
-                let clicked = false;
-                for (let i = 0; i < allResultLinks.length; i++) {
-                    const link = allResultLinks[i];
-                    const text = await link.textContent();
-                    console.log(`🔍 링크 ${i + 1} 텍스트: "${text}"`);
-                    
-                    // 정확한 링크인지 확인 (미열람 포함)
-                    if (text.includes('신청결과 확인') && text.includes('미열람')) {
-                        // 부동산 섹션이 아닌 법인 섹션의 링크인지 확인
-                        const parentText = await link.evaluate(el => {
-                            const parent = el.closest('li');
-                            return parent ? parent.textContent : '';
-                        });
-                        
-                        console.log(`🔍 링크 ${i + 1} 부모 텍스트: "${parentText}"`);
-                        
-                        // 법인 섹션인지 확인 (부동산이 아닌)
-                        if (parentText.includes('법인') && !parentText.includes('부동산')) {
-                            await link.click();
-                            await this.waitWithTimeout(3000);
-                            console.log(`✅ 법인 섹션의 신청결과 확인 링크 클릭 완료: "${text}"`);
-                            clicked = true;
-                            break;
+                            return true;
                         }
                     }
                 }
                 
-                if (!clicked) {
-                    console.log('⚠️ 법인 섹션의 신청결과 확인 링크를 찾지 못했습니다. 직접 URL로 이동합니다.');
-                    await this.page.goto('https://www.iros.go.kr/biz/Pc20VipRgsCtrl/callRgsList.do');
-                    await this.waitWithTimeout(3000);
-                    console.log('✅ 직접 URL로 이동 완료');
+                return false;
+            });
+            
+            // ⭐ 2단계 실패 시 직접 URL로 이동
+            if (!clickResult2) {
+                console.log('❌ 2단계 실패: 법인 신청결과 확인 메뉴를 찾을 수 없음. 직접 URL로 이동합니다.');
+                await this.page.goto('https://www.iros.go.kr/biz/Pc20VipRgsCtrl/callRgsList.do', {
+                    waitUntil: 'networkidle',
+                    timeout: 30000
+                });
+                await this.waitWithTimeout(2000);
+                
+                // 헬퍼 함수로 확인
+                const isOnResultPage = await this.isOnApplicationResultPage();
+                if (isOnResultPage) {
+                    console.log('✅ 직접 URL 이동으로 신청결과 화면 도달 성공');
+                    return true;
+                } else {
+                    console.log('❌ 직접 URL 이동 실패');
+                    return false;
                 }
             }
+            
+            console.log('✅ 2단계 성공: 법인 신청결과 확인 링크 클릭 완료');
+            await this.waitWithTimeout(1000);
             
             // 3단계: 하위 메뉴의 "열람·발급" 클릭하여 최종 페이지로 이동
             console.log('🔍 3단계: 하위 메뉴의 열람·발급 클릭 중...');
             
-            const clickResult3 = await this.page.evaluate(() => {
+            // ⭐ 페이지 네비게이션을 기다리면서 클릭
+            try {
+                await Promise.race([
+                    this.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }),
+                    this.page.evaluate(() => {
                 const targetElement = document.querySelector('#mf_wfm_potal_main_wf_header_gen_depth1_0_gen_depth2_1_gen_depth3_6_gen_depth4_0_btn_top_menu4');
                 if (targetElement) {
                     targetElement.click();
-                    return '열람·발급 메뉴 클릭 성공';
-                } else {
-                    return '열람·발급 메뉴를 찾을 수 없음';
-                }
-            });
-            
-            console.log(`📋 JavaScript 클릭 결과: ${clickResult3}`);
-            await this.waitWithTimeout(3000);
-            
-            // 페이지 이동 확인
-            const pageUrl = this.page.url();
-            console.log(`🔍 현재 페이지 URL: ${pageUrl}`);
-            
-            if (pageUrl.includes('열람') || pageUrl.includes('발급')) {
-                console.log('✅ 3단계 완료: 열람·발급 페이지로 이동 성공');
-            } else {
-                console.log('⚠️ 페이지 이동 확인 필요');
+                            return true;
+                        }
+                        return false;
+                    })
+                ]);
+            } catch (navError) {
+                console.log('⚠️ 네비게이션 대기 타임아웃 (정상일 수 있음)');
             }
             
-            // 최종 확인: 신청결과 화면에 도달했는지 확인 (URL 기반)
-            const finalUrl = this.page.url();
-            if (finalUrl.includes('callRgsList.do')) {
-                console.log('🎉 모든 네비게이션 단계 완료: 법인 등기사항증명서 열람·발급 신청결과 페이지 도달');
+            console.log('✅ 3단계 완료: 열람·발급 클릭 완료');
+            await this.waitWithTimeout(2000);
+            
+            // ⭐ 최종 확인: 신청결과 화면에 도달했는지 확인 (페이지 내용)
+            const isOnResultPageFinal = await this.isOnApplicationResultPage();
+            
+            if (isOnResultPageFinal) {
+                console.log('🎉 신청결과 화면 도달 성공');
                 return true;
             } else {
-                console.log('⚠️ 신청결과 화면 도달 확인 실패');
-                return false;
+                // ⭐ 최종 실패 시 직접 URL로 이동
+                console.log('⚠️ 신청결과 화면 확인 실패. 직접 URL로 이동합니다...');
+                await this.page.goto('https://www.iros.go.kr/biz/Pc20VipRgsCtrl/callRgsList.do', {
+                    waitUntil: 'networkidle',
+                    timeout: 30000
+                });
+                await this.waitWithTimeout(2000);
+                
+                // 헬퍼 함수로 다시 확인
+                const isOnResultPageDirect = await this.isOnApplicationResultPage();
+                if (isOnResultPageDirect) {
+                    console.log('✅ 직접 URL 이동으로 신청결과 화면 도달 성공');
+                    return true;
+                } else {
+                    console.log('❌ 직접 URL 이동도 실패');
+                    return false;
+                }
             }
             
         } catch (error) {
             console.log('❌ 열람·발급 메뉴 이동 중 오류:', error.message);
-            // 메뉴 클릭 실패 시 다른 방법 시도
+            
+            // ⭐ 오류 발생 시 직접 URL로 이동
             try {
-                console.log('🔄 대체 방법으로 메뉴 이동 시도...');
-                await this.page.goto('https://www.iros.go.kr/biz/Pc20VipRgsCtrl/callRgsList.do');
-                await this.waitWithTimeout(3000);
-                console.log('✅ 직접 URL로 이동 완료');
+                console.log('🔄 오류 복구: 직접 URL로 이동 시도...');
+                await this.page.goto('https://www.iros.go.kr/biz/Pc20VipRgsCtrl/callRgsList.do', {
+                    waitUntil: 'networkidle',
+                    timeout: 30000
+                });
+                await this.waitWithTimeout(2000);
                 
-                // 직접 URL 이동 후에도 신청결과 화면 확인
-                const directUrl = this.page.url();
-                if (directUrl.includes('callRgsList.do')) {
+                // 헬퍼 함수로 확인
+                const isOnResultPageError = await this.isOnApplicationResultPage();
+                if (isOnResultPageError) {
                     console.log('✅ 직접 URL 이동으로 신청결과 화면 도달 성공');
                     return true;
                 } else {
-                    console.log('❌ 직접 URL 이동 후에도 신청결과 화면 도달 실패');
+                    console.log('❌ 직접 URL 이동도 실패');
                     return false;
                 }
             } catch (directError) {
-                console.log('❌ 직접 URL 이동도 실패:', directError.message);
+                console.log('❌ 직접 URL 이동 중 오류:', directError.message);
                 return false;
             }
         }
@@ -2499,9 +2581,9 @@ class IROSFindAutomation {
                 console.log('\n🎉 법인 검색 완료!');
                 console.log('💳 이제 결제를 진행해주세요.');
                 
-                // 현재 화면이 신청결과 확인 화면인지 확인 (URL 기반)
-                const checkUrl = this.page.url();
-                if (checkUrl.includes('callRgsList.do')) {
+                // 현재 화면이 신청결과 확인 화면인지 확인 (페이지 내용)
+                const isOnResultPage = await this.isOnApplicationResultPage();
+                if (isOnResultPage) {
                     console.log('✅ 이미 신청결과확인 화면에 있습니다. 바로 열람/발급 처리를 시작합니다...');
                     // 바로 열람/발급 처리 시작
                     await this.processAllRegistrations();
@@ -2558,12 +2640,12 @@ class IROSFindAutomation {
     // 결제 완료 후 열람/발급 자동화
     async processPaymentAndDownload() {
         try {
-            // 현재 화면이 신청결과 확인 화면인지 확인 (URL 기반)
-            const paymentUrl = this.page.url();
-            if (paymentUrl.includes('callRgsList.do')) {
+            // 현재 화면이 신청결과 확인 화면인지 확인 (페이지 내용)
+            const isOnResultPage = await this.isOnApplicationResultPage();
+            if (isOnResultPage) {
                 console.log('✅ 이미 신청결과확인 화면에 있습니다. 바로 열람/발급 처리를 시작합니다...');
             } else {
-            console.log('\n💳 결제 완료 후 열람/발급 자동화를 시작합니다...');
+                console.log('\n💳 결제 완료 후 열람/발급 자동화를 시작합니다...');
             }
             
             // 2. 모든 등기에 대해 순차적으로 열람/발급 처리
