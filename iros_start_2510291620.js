@@ -592,4 +592,5 @@ async function processPdfAndRename(folderPath = './iros_downloads') {
   if (failCount > 0) {
     console.log(' 실패한 상호명:', failedCompanies.join(', '));
 }
+
 })();
